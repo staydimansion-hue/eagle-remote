@@ -361,23 +361,32 @@ function logout(msg) {
   showLogin(msg);
 }
 
-async function loadAll() {
+// 아이크루 API 규칙: 폴링 금지. 사용자가 직접 요청할 때만 조회하고, 최소 간격을 둔다.
+const MIN_REFRESH_MS = 15 * 1000;
+const STATIC_TTL_MS = 6 * 3600 * 1000; // 업소 정보·객실 타입은 거의 안 바뀌므로 6시간 캐시
+
+async function loadAll({ force = false } = {}) {
   if (S.busy) return;
+  if (!force && Date.now() - S.loadedAt < MIN_REFRESH_MS) { toast('방금 새로고침했습니다. 잠시 후 다시 시도하세요.'); return; }
   S.busy = true;
   $('refreshBtn').disabled = true;
   try {
     const a = S.accomId;
-    const [accom, rooms, types, sales, reserves, interrupts] = await Promise.all([
-      api('GET', `/v1/accom/${a}`),
+    const needStatic = !S.accom || !Object.keys(S.types).length || Date.now() - (S.staticAt || 0) > STATIC_TTL_MS;
+    const [rooms, sales, reserves, interrupts, accom, types] = await Promise.all([
       api('GET', `/v1/room/all-by-accom/${a}`),
-      api('GET', `/v1/room-type/all-by-accom/${a}`),
       api('GET', `/v1/room-sale/all-activated/${a}`),
       api('GET', `/v1/room-reserve/all-by-reserved/${a}`).catch(() => ({ room_reserves: {} })),
       api('GET', `/v1/room-interrupt/all-by-accom/${a}`).catch(() => ({ room_interrupts: {} })),
+      needStatic ? api('GET', `/v1/accom/${a}`) : null,
+      needStatic ? api('GET', `/v1/room-type/all-by-accom/${a}`) : null,
     ]);
-    S.accom = asMap(pick(accom, 'accoms'))[a] || pick(accom, 'accom');
+    if (needStatic) {
+      S.accom = asMap(pick(accom, 'accoms'))[a] || pick(accom, 'accom');
+      S.types = asMap(pick(types, 'room_types'));
+      S.staticAt = Date.now();
+    }
     S.rooms = asMap(pick(rooms, 'rooms'));
-    S.types = asMap(pick(types, 'room_types'));
     S.sales = asMap(pick(sales, 'room_sales'));
     S.reserves = asMap(pick(reserves, 'room_reserves'));
     S.interrupts = asMap(pick(interrupts, 'room_interrupts'));
@@ -435,7 +444,7 @@ async function run(fn, btn) {
     if (msg === false) return;
     closeSheet();
     toast(msg);
-    await loadAll();
+    await loadAll({ force: true }); // 처리 직후 결과 확인용
   } catch (e) {
     if (e.message === 'unauthorized') return;
     if (err) err.textContent = e.message; else toast(e.message);
@@ -886,7 +895,7 @@ $('loginForm').addEventListener('submit', async (e) => {
     const mac = await login($('mac').value);
     store.set('er.mac', $('rememberMac').checked ? mac : null);
     showBoard();
-    await loadAll();
+    await loadAll({ force: true });
   } catch (err) {
     $('loginErr').textContent = err.message;
   } finally {
@@ -915,9 +924,9 @@ $('tabRooms').addEventListener('click', (e) => {
   const b = e.target.closest('.room');
   if (b) openRoom(b.dataset.room);
 });
-// 폴링 대신, 앱으로 다시 돌아왔을 때만 새로 불러온다.
+// 폴링 대신, 앱으로 다시 돌아왔을 때만(마지막 조회 3분 경과 시) 새로 불러온다.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.token && Date.now() - S.loadedAt > 30000) loadAll();
+  if (document.visibilityState === 'visible' && S.token && Date.now() - S.loadedAt > 3 * 60 * 1000) loadAll({ force: true });
 });
 
 (function boot() {
@@ -926,7 +935,7 @@ document.addEventListener('visibilitychange', () => {
     if (saved && saved.token && (!saved.me?.exp || saved.me.exp > Date.now() + 60000)) {
       Object.assign(S, saved);
       showBoard();
-      loadAll();
+      loadAll({ force: true });
       return;
     }
   } catch {}
