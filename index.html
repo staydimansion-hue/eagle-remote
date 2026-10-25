@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; connect-src https://api.icrew.cloud; img-src 'self' data:">
+<title>디멘션 객실 리모컨</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #fff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --primary: #111827; --danger: #dc2626; --blue: #1d4ed8;
+    --st-empty: #e5e7eb; --st-using: #2563eb; --st-outing: #7c3aed;
+    --st-clean-order: #f59e0b; --st-cleaning: #10b981; --st-inspect: #64748b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  body { padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px); }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  input, select, textarea { font: inherit; }
+  .hidden { display: none !important; }
+
+  header { position: sticky; top: 0; z-index: 10; background: var(--primary); color: #fff;
+    padding: 12px 16px; display: flex; align-items: center; gap: 8px; height: 60px; }
+  header h1 { font-size: 16px; margin: 0; flex: 1; font-weight: 700; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .sub { font-size: 12px; opacity: .7; font-weight: 400; display: block; }
+  .icon-btn { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff;
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+
+  main { padding: 12px 16px; max-width: 960px; margin: 0 auto; }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 24px; }
+  .login h2 { margin: 0 0 4px; font-size: 20px; }
+  .login p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  .in { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+    font-size: 16px; color: var(--text); }
+  .btn { width: 100%; padding: 13px; border-radius: 10px; border: 0; background: var(--primary); color: #fff;
+    font-weight: 600; font-size: 15px; margin-top: 12px; }
+  .btn.secondary { background: #fff; color: var(--text); border: 1px solid var(--line); }
+  .btn.blue { background: var(--blue); }
+  .btn.danger { background: var(--danger); }
+  .btn:disabled, .act:disabled { opacity: .5; }
+  .err { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; white-space: pre-wrap; }
+
+  /* summary + tabs */
+  .summary { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 4px 9px; border-radius: 999px; background: var(--panel);
+    border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .tabs { display: flex; gap: 6px; position: sticky; top: 60px; z-index: 5; background: var(--bg);
+    padding: 10px 0; margin-bottom: 4px; }
+  .tabs button { flex: 1; padding: 11px 4px; border-radius: 10px; border: 1px solid var(--line); background: #fff;
+    font-size: 14px; font-weight: 600; }
+  .tabs button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* lists */
+  .sec-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 14px 0 8px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+    display: flex; gap: 10px; align-items: center; text-align: left; width: 100%; }
+  .item .main { flex: 1; min-width: 0; }
+  .item .t1 { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .t2 { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+  .badge { font-size: 12px; font-weight: 700; padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+  .b-unassigned { background: #fee2e2; color: #b91c1c; }
+  .b-assigned { background: #dbeafe; color: #1d4ed8; }
+  .b-in { background: #dcfce7; color: #15803d; }
+  .b-late { background: #fee2e2; color: #b91c1c; }
+  .act { padding: 11px 16px; border-radius: 10px; border: 0; background: var(--danger); color: #fff;
+    font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .act.blue { background: var(--blue); }
+  .empty-msg { color: var(--muted); font-size: 14px; padding: 24px 0; text-align: center; }
+  .more { background: transparent; border: 0; color: var(--muted); font-size: 13px; padding: 10px 0; text-decoration: underline; }
+
+  /* room grid */
+  .floor { margin: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .room { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+    text-align: left; min-height: 96px; position: relative; border-left-width: 5px; min-width: 0; }
+  .room .no { font-size: 17px; font-weight: 700; }
+  .room .type { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .room .st { font-size: 12px; font-weight: 600; margin-top: 6px; }
+  .room .guest { font-size: 12px; font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .room .assigned { font-size: 11px; color: var(--blue); font-weight: 600; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .room .until { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .room .lock { position: absolute; top: 8px; right: 8px; font-size: 10px; color: var(--danger); font-weight: 700; }
+  /* 입실(사용중·외출) 객실은 카드 전체를 칠해서 한눈에 구분 */
+  .room.occupied { background: var(--st-using); border-color: var(--st-using); color: #fff; }
+  .room.occupied.outing { background: var(--st-outing); border-color: var(--st-outing); }
+  .room.occupied .type, .room.occupied .until { color: rgba(255,255,255,.8); }
+  .room.clean { background: #fef3c7; border-color: #fcd34d; }
+  .room.has-resv { background: #eff6ff; border-color: #93c5fd; }
+  .room.sel { outline: 3px solid var(--primary); }
+  .room:disabled { opacity: .4; }
+
+  /* sheet */
+  .backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.45); z-index: 50; display: flex;
+    align-items: flex-end; justify-content: center; }
+  .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+    border-radius: 16px 16px 0 0; padding: 18px 16px calc(env(safe-area-inset-bottom) + 18px); }
+  @media (min-width: 640px) { .backdrop { align-items: center; } .sheet { border-radius: 16px; } }
+  .sheet h3 { margin: 0; font-size: 18px; }
+  .sheet .hint { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+  .seg { display: flex; gap: 6px; margin-top: 4px; }
+  .seg button { flex: 1; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
+  .seg button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kv { display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; font-size: 14px; margin: 12px 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; word-break: break-all; }
+  .resv { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; width: 100%;
+    background: #fff; text-align: left; font-size: 14px; }
+  .resv.on { border-color: var(--primary); outline: 2px solid var(--primary); }
+  .resv small { color: var(--muted); display: block; margin-top: 2px; }
+  .warn { background: #fef3c7; color: #92400e; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
+    background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 99;
+    max-width: calc(100% - 32px); }
+</style>
+</head>
+<body>
+
+<header id="topbar" class="hidden">
+  <h1><span id="accomName">객실 리모컨</span><span class="sub" id="lastLoaded"></span></h1>
+  <button class="icon-btn" id="refreshBtn">새로고침</button>
+  <button class="icon-btn" id="logoutBtn">로그아웃</button>
+</header>
+
+<main>
+  <section id="loginView" class="login hidden">
+    <h2>객실 리모컨</h2>
+    <p>이글 프론트 PC의 MAC 주소로 로그인합니다. 이글 로그인 화면에 표시된 MAC Address를 입력하세요. MAC 주소는 아이크루 서버(api.icrew.cloud)로만 전송됩니다.</p>
+    <form id="loginForm" autocomplete="off">
+      <label class="f" for="mac">MAC 주소</label>
+      <input class="in" id="mac" placeholder="70:85:C2:00:00:00" autocapitalize="characters" autocorrect="off" spellcheck="false" required>
+      <label class="f" style="display:flex;align-items:center;gap:8px;color:var(--text)">
+        <input type="checkbox" id="rememberMac" checked> 이 기기에서 MAC 주소 기억
+      </label>
+      <button class="btn" id="loginBtn" type="submit">로그인</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </section>
+
+  <section id="boardView" class="hidden">
+    <div class="summary" id="summary"></div>
+    <div class="tabs" id="tabs">
+      <button data-tab="rooms">객실 현황</button>
+      <button data-tab="resv">오늘 예약</button>
+      <button data-tab="out">퇴실 예정</button>
+    </div>
+    <div id="tabRooms"></div>
+    <div id="tabResv" class="hidden"></div>
+    <div id="tabOut" class="hidden"></div>
+  </section>
+</main>
+
+<div id="sheetRoot"></div>
+
+<script>
+'use strict';
+const API = 'https://api.icrew.cloud';
+const APP_ID = '1WUIEq3LX3IBMJGes0VZ';           // Eagle 앱 ID
+const DEFAULT_ACCOM_ID = 'Mpi9D8MH5DFqCxXnTdh9'; // 인천미추홀-디멘션
+const KST = 9 * 3600 * 1000;
+const DAY = 24 * 3600 * 1000;
+
+const STATES = {
+  EMPTY:         { label: '공실',     color: 'var(--st-empty)' },
+  USING:         { label: '사용중',   color: 'var(--st-using)' },
+  OUTING:        { label: '외출',     color: 'var(--st-outing)' },
+  CLEAN_ORDER:   { label: '청소요청', color: 'var(--st-clean-order)' },
+  CLEANING:      { label: '청소중',   color: 'var(--st-cleaning)' },
+  INSPECT_ORDER: { label: '점검요청', color: 'var(--st-inspect)' },
+  INSPECTING:    { label: '점검중',   color: 'var(--st-inspect)' },
+};
+const STAY = { HOURS: '대실', DAYS: '숙박', LONG_DAYS: '장기', OTHER: '기타' };
+const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야놀자호텔', GOOD_CHOICE: '여기어때',
+  GOOD_CHOICE_HOTEL: '여기어때호텔', AGODA: '아고다', EXPEDIA: '익스피디아', AIR_BNB: '에어비앤비',
+  BOOKING_HOLDINGS: '부킹닷컴', DDNAYO: '떠나요', KULL_STAY: '꿀스테이', ONDA: '온다', FRONT: '프론트',
+  UNPL: '언플', OTHER: '기타' };
+
+const S = {
+  token: null, me: null, accomId: DEFAULT_ACCOM_ID, accom: null,
+  rooms: {}, types: {}, sales: {}, reserves: {}, interrupts: {}, loadedAt: 0, busy: false,
+  tab: 'rooms', showFuture: false,
+};
+
+// ---------- utils ----------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const won = (n) => (Number(n) || 0).toLocaleString('ko-KR') + '원';
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
+// API 목록은 {id: object} 형태로 내려온다.
+const asMap = (x) => {
+  if (!x) return {};
+  if (Array.isArray(x)) return Object.fromEntries(x.map((o) => [o.id ?? o._id, o]));
+  return x;
+};
+const pick = (res, key) => (res && typeof res === 'object' && key in res ? res[key] : res);
+
+function fmtTime(ms) {
+  if (!ms) return '-';
+  const d = new Date(ms + KST);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+function fmtClock(ms) {
+  if (!ms) return '-';
+  const d = new Date(ms + KST);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+// datetime-local 입력값은 폰 시간대와 무관하게 KST로 취급
+const toKstInput = (ms) => new Date(ms + KST).toISOString().slice(0, 16);
+const fromKstInput = (s) => Date.parse(s + ':00Z') - KST;
+// 오늘(KST) 자정 경계
+function todayEnd() {
+  const k = new Date(Date.now() + KST);
+  return Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate()) - KST + DAY;
+}
+
+function defaultCheckout(stayType, type) {
+  const now = Date.now();
+  if (stayType === 'HOURS') {
+    const h = Number(type?.hours_stay_weekday_afternoon_use_hours) || 4;
+    return now + h * 3600 * 1000;
+  }
+  // 숙박: 다음날 11:00 KST (새벽 6시 전 입실이면 당일 11:00)
+  const k = new Date(now + KST);
+  let base = Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate(), 11, 0) - KST;
+  if (k.getUTCHours() >= 6) base += DAY;
+  if (stayType === 'LONG_DAYS') base += DAY;
+  return base;
+}
+function defaultFee(stayType, type) {
+  if (!type) return 0;
+  return Number(stayType === 'HOURS' ? type.default_hours_fee : type.default_days_fee) || 0;
+}
+
+function decodeJwt(t) {
+  try { return JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))))); }
+  catch { return {}; }
+}
+
+let toastTimer;
+function toast(msg) {
+  let el = document.querySelector('.toast');
+  if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 3500);
+}
+
+// ---------- data helpers ----------
+const roomName = (r) => r ? (r.display_name || String(r.no ?? '')) : '';
+const roomState = (r) => STATES[r.state_summary] || { label: r.state_summary || '-', color: 'var(--st-empty)' };
+const roomById = (id) => (id && S.rooms[id] ? { id, ...S.rooms[id] } : null);
+const typeName = (id) => S.types[id]?.display_name || '';
+const isLocked = (roomId) => Object.values(S.interrupts).some((i) => i.room_id === roomId);
+const roomOfSale = (saleId) => {
+  const e = Object.entries(S.rooms).find(([, r]) => r.room_sale_id === saleId);
+  return e ? { id: e[0], ...e[1] } : null;
+};
+// 공실에 배정되어 입실 대기 중인 예약
+const assignedReserve = (roomId) => {
+  const e = Object.entries(S.reserves).find(([, v]) => v.state === 'GENERATED' && v.room_id === roomId);
+  return e ? { id: e[0], ...e[1] } : null;
+};
+const saleAgent = (s) => (s.payments || []).map((p) => p.agent_type).find(Boolean) || '';
+const sortedRooms = () => Object.entries(S.rooms).map(([id, r]) => ({ id, ...r }))
+  .sort((a, b) => (a.floor - b.floor) || roomName(a).localeCompare(roomName(b), 'ko', { numeric: true }));
+
+// ---------- api ----------
+async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(S.token ? { Authorization: 'Bearer ' + S.token } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (res.status === 401) { logout('로그인이 만료되었습니다. 다시 로그인하세요.'); throw new Error('unauthorized'); }
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
+    throw new Error(`${msg} (${method} ${path.split('/').slice(0, 3).join('/')})`);
+  }
+  return data;
+}
+
+// "70-85-c2..." / "7085c2..." 등 어떤 형식으로 입력해도 이글 표기(70:85:C2:..)로 맞춘다.
+function normalizeMac(s) {
+  const hex = String(s).replace(/[^0-9a-f]/gi, '').toUpperCase();
+  return hex.length === 12 ? hex.match(/../g).join(':') : null;
+}
+
+// 이글 PC의 "프론트 로그인"과 같은 장치 인증
+async function login(macInput) {
+  const mac = normalizeMac(macInput);
+  if (!mac) throw new Error('MAC 주소 형식이 올바르지 않습니다. (예: 70:85:C2:D9:00:00)');
+  const res = await fetch(API + '/v1/token/device', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: APP_ID, mac_address: mac }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (res.status === 404) throw new Error('등록되지 않은 MAC 주소입니다. 이글 로그인 화면의 MAC Address를 확인하세요.');
+  if (!res.ok) throw new Error((data && data.message) || `로그인 실패 (HTTP ${res.status})`);
+  S.token = data.token;
+  const payload = decodeJwt(data.token);
+  const devices = asMap(data.devices);
+  const myKey = payload.device_id || Object.keys(devices)[0] || null;
+  const accom = devices[myKey]?.accom_id || payload.accom_id;
+  S.me = { id: myKey, loginId: devices[myKey]?.name || mac, exp: payload.exp ? payload.exp * 1000 : 0 };
+  S.accomId = accom || DEFAULT_ACCOM_ID;
+  store.set('er.session', JSON.stringify({ token: S.token, me: S.me, accomId: S.accomId }));
+  return mac;
+}
+
+function logout(msg) {
+  S.token = null; S.me = null;
+  store.set('er.session', null);
+  closeSheet();
+  showLogin(msg);
+}
+
+async function loadAll() {
+  if (S.busy) return;
+  S.busy = true;
+  $('refreshBtn').disabled = true;
+  try {
+    const a = S.accomId;
+    const [accom, rooms, types, sales, reserves, interrupts] = await Promise.all([
+      api('GET', `/v1/accom/${a}`),
+      api('GET', `/v1/room/all-by-accom/${a}`),
+      api('GET', `/v1/room-type/all-by-accom/${a}`),
+      api('GET', `/v1/room-sale/all-activated/${a}`),
+      api('GET', `/v1/room-reserve/all-by-reserved/${a}`).catch(() => ({ room_reserves: {} })),
+      api('GET', `/v1/room-interrupt/all-by-accom/${a}`).catch(() => ({ room_interrupts: {} })),
+    ]);
+    S.accom = asMap(pick(accom, 'accoms'))[a] || pick(accom, 'accom');
+    S.rooms = asMap(pick(rooms, 'rooms'));
+    S.types = asMap(pick(types, 'room_types'));
+    S.sales = asMap(pick(sales, 'room_sales'));
+    S.reserves = asMap(pick(reserves, 'room_reserves'));
+    S.interrupts = asMap(pick(interrupts, 'room_interrupts'));
+    S.loadedAt = Date.now();
+    render();
+  } catch (e) {
+    if (e.message !== 'unauthorized') toast('불러오기 실패: ' + e.message);
+  } finally {
+    S.busy = false;
+    $('refreshBtn').disabled = false;
+  }
+}
+
+// 다른 기기(관제실/PC)와 동시에 같은 객실을 만지지 않도록 잠근 상태에서 작업한다.
+async function withRoomLock(roomId, fn) {
+  const res = await api('POST', `/v1/room-interrupt/${S.accomId}/${roomId}`);
+  const ri = pick(res, 'room_interrupt') || {};
+  const byOther = !!ri.user_id || (ri.device_id && ri.device_id !== S.me.id);
+  if (byOther) throw new Error('다른 곳(PC/관제실)에서 이 객실을 처리 중입니다. 잠시 후 다시 시도하세요.');
+  try { return await fn(); }
+  finally { await api('DELETE', `/v1/room-interrupt/${S.accomId}/${roomId}`).catch(() => {}); }
+}
+
+// ---------- actions ----------
+async function checkoutRoom(r) {
+  const sale = S.sales[r.room_sale_id];
+  if (!confirm(`${roomName(r)}${sale?.guest_name ? ' (' + sale.guest_name + ')' : ''} 퇴실 처리할까요?\n객실이 청소요청 상태로 바뀝니다.`)) return false;
+  await withRoomLock(r.id, () => api('PUT', `/v1/room-sale/${S.accomId}/${r.room_sale_id}`, {
+    activate: false, check_out_time: Date.now(),
+  }));
+  return `${roomName(r)} 퇴실 처리했습니다.`;
+}
+
+// 예약에 객실 지정 (입실은 고객이 키오스크/QR로 하거나 '바로 입실'로 처리)
+async function assignReserve(v, room) {
+  const msg = room
+    ? `${v.name || '예약'} 예약을 ${roomName(room)}에 배정할까요?` +
+      (v.room_type_id && room.room_type_id !== v.room_type_id ? `\n\n예약 타입(${typeName(v.room_type_id)})과 객실 타입(${typeName(room.room_type_id)})이 다릅니다.` : '')
+    : `${v.name || '예약'} 예약의 객실 배정을 해제할까요?`;
+  if (!confirm(msg)) return false;
+  const body = { room_id: room ? room.id : null };
+  if (room && room.room_type_id !== v.room_type_id) body.room_type_id = room.room_type_id;
+  await api('PUT', `/v1/room-reserve/${S.accomId}/${v.id}`, body);
+  return room ? `${roomName(room)}에 배정했습니다.` : '배정을 해제했습니다.';
+}
+
+// 버튼 동작 공통 처리: 실행 → 성공 시 시트 닫고 새로고침
+async function run(fn, btn) {
+  const err = $('sheetErr');
+  const btns = btn ? [btn] : [...document.querySelectorAll('.sheet button')];
+  btns.forEach((b) => b.disabled = true);
+  if (err) err.textContent = '';
+  try {
+    const msg = await fn();
+    if (msg === false) return;
+    closeSheet();
+    toast(msg);
+    await loadAll();
+  } catch (e) {
+    if (e.message === 'unauthorized') return;
+    if (err) err.textContent = e.message; else toast(e.message);
+  } finally {
+    btns.forEach((b) => b.disabled = false);
+  }
+}
+
+// ---------- render ----------
+function showLogin(msg) {
+  $('topbar').classList.add('hidden');
+  $('boardView').classList.add('hidden');
+  $('loginView').classList.remove('hidden');
+  $('loginErr').textContent = msg || '';
+}
+function showBoard() {
+  $('loginView').classList.add('hidden');
+  $('topbar').classList.remove('hidden');
+  $('boardView').classList.remove('hidden');
+}
+function setTab(tab) {
+  S.tab = tab;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  $('tabResv').classList.toggle('hidden', tab !== 'resv');
+  $('tabOut').classList.toggle('hidden', tab !== 'out');
+  $('tabRooms').classList.toggle('hidden', tab !== 'rooms');
+}
+
+// 오늘 예약: 입실 전(미배정/배정) + 오늘 예약으로 입실한 투숙
+function reservationRows() {
+  const end = todayEnd(), start = end - DAY;
+  const rows = [];
+  for (const [id, v] of Object.entries(S.reserves)) {
+    if (v.state !== 'GENERATED') continue;
+    rows.push({ kind: 'reserve', id, at: v.check_in_sched || 0, status: v.room_id ? 'assigned' : 'unassigned',
+      name: v.name, agent: v.agent, stay: v.stay_type, type: v.room_type_id || '', in: v.check_in_sched, out: v.check_out_sched,
+      room: roomById(v.room_id), ota: v.ota_room_name });
+  }
+  for (const [id, s] of Object.entries(S.sales)) {
+    if (!s.room_reserve_id || S.reserves[s.room_reserve_id]?.state === 'GENERATED') continue;
+    if ((s.check_in_time || 0) < start) continue;
+    rows.push({ kind: 'sale', id, at: s.check_in_time || 0, status: 'in',
+      name: s.guest_name, agent: saleAgent(s), stay: s.stay_type, type: s.room_type_id || '', in: s.check_in_time, out: s.check_out_sched_time,
+      room: roomOfSale(id) });
+  }
+  const order = { unassigned: 0, assigned: 1, in: 2 };
+  rows.sort((a, b) => (order[a.status] - order[b.status]) || (a.at - b.at));
+  return { today: rows.filter((r) => r.kind === 'sale' || r.at < end), future: rows.filter((r) => r.kind === 'reserve' && r.at >= end) };
+}
+
+function reserveItem(r) {
+  const badge = r.status === 'unassigned' ? `<button class="act blue" data-assign="${esc(r.id)}">배정</button>`
+    : r.status === 'assigned' ? `<span class="badge b-assigned">배정 ${esc(roomName(r.room))}</span>`
+    : `<span class="badge b-in">입실 ${esc(roomName(r.room))}</span>`;
+  return `<div class="item" data-kind="${r.kind}" data-id="${esc(r.id)}">
+    <div class="main">
+      <div class="t1">${esc(r.name || '이름 없음')} <span style="font-weight:500;color:var(--muted)">· ${esc(AGENTS[r.agent] || r.agent || '현장')}</span></div>
+      <div class="t2">${r.status === 'unassigned' ? '<span style="color:var(--danger);font-weight:700">미배정</span> · ' : ''}${esc(STAY[r.stay] || '')} · ${esc(typeName(r.type) || r.ota || '타입 미정')}<br>${fmtTime(r.in)} → ${fmtTime(r.out)}</div>
+    </div>${badge}</div>`;
+}
+
+function render() {
+  $('accomName').textContent = S.accom?.name || '객실 리모컨';
+  $('lastLoaded').textContent = `${fmtTime(S.loadedAt)} 기준`;
+
+  const rooms = sortedRooms();
+  const counts = {};
+  rooms.forEach((r) => { counts[r.state_summary] = (counts[r.state_summary] || 0) + 1; });
+  $('summary').innerHTML = Object.entries(STATES).filter(([k]) => counts[k])
+    .map(([k, v]) => `<span class="chip"><span class="dot" style="background:${v.color}"></span>${v.label} ${counts[k]}</span>`).join('');
+
+  // 오늘 예약
+  const { today, future } = reservationRows();
+  const unassigned = today.filter((r) => r.status === 'unassigned').length;
+  $('tabResv').innerHTML = (today.length
+    ? `<div class="sec-title">오늘 입실 ${today.length}건${unassigned ? ` · 미배정 ${unassigned}건` : ''}</div><div class="list">${today.map(reserveItem).join('')}</div>`
+    : '<p class="empty-msg">오늘 입실 예약이 없습니다.</p>')
+    + (future.length ? (S.showFuture
+      ? `<div class="sec-title">내일 이후 ${future.length}건</div><div class="list">${future.map(reserveItem).join('')}</div>`
+      : `<button class="more" id="moreFuture">내일 이후 예약 ${future.length}건 보기</button>`) : '');
+
+  // 퇴실 예정
+  const end = todayEnd(), now = Date.now();
+  const stays = Object.entries(S.sales).map(([id, s]) => ({ id, s, room: roomOfSale(id) }))
+    .filter((x) => x.room).sort((a, b) => (a.s.check_out_sched_time || 0) - (b.s.check_out_sched_time || 0));
+  const outToday = stays.filter((x) => (x.s.check_out_sched_time || 0) < end);
+  const outLater = stays.filter((x) => (x.s.check_out_sched_time || 0) >= end);
+  const outItem = (x) => {
+    const late = x.s.check_out_sched_time && x.s.check_out_sched_time < now;
+    return `<div class="item" data-room="${esc(x.room.id)}">
+      <div class="main">
+        <div class="t1">${esc(roomName(x.room))} · ${esc(x.s.guest_name || '이름 없음')}</div>
+        <div class="t2">${esc(STAY[x.s.stay_type] || '')} · 퇴실 ${fmtTime(x.s.check_out_sched_time)}
+          ${late ? ' <span class="badge b-late">시간 지남</span>' : ''}</div>
+      </div>
+      <button class="act" data-checkout="${esc(x.room.id)}">퇴실</button>
+    </div>`;
+  };
+  $('tabOut').innerHTML = (outToday.length
+    ? `<div class="sec-title">오늘 퇴실 ${outToday.length}건</div><div class="list">${outToday.map(outItem).join('')}</div>`
+    : '<p class="empty-msg">오늘 퇴실 예정이 없습니다.</p>')
+    + (outLater.length ? `<div class="sec-title">내일 이후 퇴실 ${outLater.length}건</div><div class="list">${outLater.map(outItem).join('')}</div>` : '');
+
+  // 객실 현황
+  const byFloor = {};
+  rooms.forEach((r) => { (byFloor[r.floor ?? 0] ||= []).push(r); });
+  $('tabRooms').innerHTML = Object.keys(byFloor).sort((a, b) => a - b).map((f) => `
+    <div class="floor">${Number(f) ? f + '층' : '기타'}</div>
+    <div class="grid">${byFloor[f].map(roomCard).join('')}</div>`).join('')
+    || '<p class="empty-msg">객실 정보가 없습니다.</p>';
+
+  const tabBtn = (t) => document.querySelector(`#tabs [data-tab="${t}"]`);
+  tabBtn('resv').textContent = `오늘 예약 ${today.length}`;
+  tabBtn('out').textContent = `퇴실 ${stays.length}`;
+  tabBtn('rooms').textContent = `객실 ${rooms.length}`;
+  setTab(S.tab);
+}
+
+function roomCard(r, opts = {}) {
+  const st = roomState(r);
+  const sale = r.room_sale_id ? S.sales[r.room_sale_id] : null;
+  const ar = !sale && assignedReserve(r.id);
+  const cls = sale ? ` occupied${r.state_summary === 'OUTING' ? ' outing' : ''}`
+    : ar ? ' has-resv'
+    : (r.state_summary === 'CLEAN_ORDER' || r.state_summary === 'CLEANING') ? ' clean' : '';
+  return `<button class="room${cls}${opts.selected ? ' sel' : ''}" data-room="${esc(r.id)}" style="border-left-color:${st.color}"${opts.disabled ? ' disabled' : ''}>
+    ${isLocked(r.id) ? '<span class="lock">처리중</span>' : ''}
+    <div class="no">${esc(roomName(r))}</div>
+    <div class="type">${esc(typeName(r.room_type_id))}</div>
+    <div class="st">${esc(st.label)}</div>
+    ${sale ? `<div class="guest">${esc(sale.guest_name || '이름 없음')}</div>
+      <div class="until">${esc(STAY[sale.stay_type] || '')} ~${fmtTime(sale.check_out_sched_time)}</div>` : ''}
+    ${ar ? `<div class="assigned">배정: ${esc(ar.name || '예약')}</div><div class="until">${fmtClock(ar.check_in_sched)} 입실 예정</div>` : ''}
+  </button>`;
+}
+
+// ---------- sheets ----------
+function openSheet(html, onMount) {
+  $('sheetRoot').innerHTML = `<div class="backdrop" id="backdrop"><div class="sheet" role="dialog">${html}</div></div>`;
+  $('backdrop').addEventListener('click', (e) => { if (e.target.id === 'backdrop') closeSheet(); });
+  onMount && onMount($('sheetRoot').querySelector('.sheet'));
+}
+function closeSheet() { $('sheetRoot').innerHTML = ''; }
+
+function openRoom(roomId) {
+  const r = roomById(roomId);
+  if (!r) return;
+  const sale = r.room_sale_id ? S.sales[r.room_sale_id] : null;
+  if (sale) return openSaleSheet(r, sale);
+  openEmptyRoomSheet(r);
+}
+
+// 공실: 예약 배정이 기본, 현장 손님은 바로 입실
+function openEmptyRoomSheet(r) {
+  const st = roomState(r);
+  const ar = assignedReserve(r.id);
+  const end = todayEnd();
+  const resvLine = (v) => `${esc(v.name || '이름 없음')} · ${esc(AGENTS[v.agent] || v.agent || '')} · ${esc(STAY[v.stay_type] || '')}
+    <small>${fmtTime(v.check_in_sched)} ~ ${fmtTime(v.check_out_sched)} · ${esc(typeName(v.room_type_id) || v.ota_room_name || '')}
+    ${v.room_type_id && v.room_type_id !== r.room_type_id ? ' · 객실 타입 다름' : ''}</small>`;
+
+  if (ar) {
+    openSheet(`
+      <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
+      <div class="hint">${esc(typeName(r.room_type_id))}</div>
+      <label class="f">배정된 예약</label>
+      <div class="resv on">${resvLine(ar)}</div>
+      <button class="btn" id="checkinNowBtn">바로 입실 처리</button>
+      <div class="row2">
+        <button class="btn secondary" id="changeBtn">다른 객실로 변경</button>
+        <button class="btn secondary" id="unassignBtn">배정 해제</button>
+      </div>
+      <button class="btn secondary" id="closeBtn">닫기</button>
+      <div class="err" id="sheetErr"></div>
+    `, () => {
+      $('closeBtn').onclick = closeSheet;
+      $('checkinNowBtn').onclick = () => openCheckInSheet(r, ar.id);
+      $('changeBtn').onclick = () => openReserveSheet(ar.id, true);
+      $('unassignBtn').onclick = () => run(() => assignReserve(ar, null));
+    });
+    return;
+  }
+
+  // 미배정 예약: 오늘 → 같은 타입 → 입실 시간 순
+  const list = Object.entries(S.reserves).map(([id, v]) => ({ id, ...v }))
+    .filter((v) => v.state === 'GENERATED' && !v.room_id)
+    .sort((a, b) => ((b.check_in_sched < end) - (a.check_in_sched < end))
+      || ((b.room_type_id === r.room_type_id) - (a.room_type_id === r.room_type_id))
+      || ((a.check_in_sched || 0) - (b.check_in_sched || 0)));
+  openSheet(`
+    <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
+    <div class="hint">${esc(typeName(r.room_type_id))}</div>
+    ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 여부를 확인하세요.</div>` : ''}
+    <div class="row2">
+      <button class="btn secondary" id="walkinBtn">현장 손님 입실</button>
+      <button class="btn secondary" id="closeBtn">닫기</button>
+    </div>
+    <div class="err" id="sheetErr"></div>
+    <label class="f">예약을 누르면 이 객실에 배정됩니다 (미배정 ${list.length}건)</label>
+    <div id="resvPick">
+      ${list.length ? list.slice(0, 40).map((v) => `<button class="resv" data-resv="${esc(v.id)}">${resvLine(v)}</button>`).join('')
+        : '<p class="empty-msg">미배정 예약이 없습니다.</p>'}
+    </div>
+  `, (root) => {
+    $('closeBtn').onclick = closeSheet;
+    $('walkinBtn').onclick = () => openCheckInSheet(r);
+    root.querySelector('#resvPick').addEventListener('click', (e) => {
+      const b = e.target.closest('.resv');
+      const v = b && list.find((x) => x.id === b.dataset.resv);
+      if (v) run(() => assignReserve(v, r));
+    });
+  });
+}
+
+function openSaleSheet(r, sale) {
+  const st = roomState(r);
+  const agent = saleAgent(sale);
+  openSheet(`
+    <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
+    <div class="hint">${esc(typeName(r.room_type_id))}</div>
+    <dl class="kv">
+      <dt>고객</dt><dd>${esc(sale.guest_name || '-')}</dd>
+      <dt>유형</dt><dd>${esc(STAY[sale.stay_type] || sale.stay_type)}${agent ? ' · ' + esc(AGENTS[agent] || agent) : ''}</dd>
+      <dt>입실</dt><dd>${fmtTime(sale.check_in_time)}</dd>
+      <dt>퇴실 예정</dt><dd>${fmtTime(sale.check_out_sched_time)}</dd>
+      <dt>요금</dt><dd>${won(sale.fee)}</dd>
+      <dt>인원</dt><dd>${esc(sale.person_count || '-')}명</dd>
+      ${sale.phones?.length ? `<dt>연락처</dt><dd><a href="tel:${esc(sale.phones[0])}">${esc(sale.phones[0])}</a></dd>` : ''}
+      ${sale.note ? `<dt>메모</dt><dd>${esc(sale.note)}</dd>` : ''}
+    </dl>
+    <button class="btn danger" id="checkoutBtn">퇴실 처리</button>
+    <label class="f" for="newOut">퇴실 예정 시간 변경</label>
+    <div class="row2">
+      <input class="in" id="newOut" type="datetime-local" value="${toKstInput(sale.check_out_sched_time || Date.now())}">
+      <button class="btn secondary" id="extendBtn" style="margin-top:0">시간 변경</button>
+    </div>
+    <button class="btn secondary" id="closeBtn">닫기</button>
+    <div class="err" id="sheetErr"></div>
+  `, () => {
+    $('closeBtn').onclick = closeSheet;
+    $('checkoutBtn').onclick = () => run(() => checkoutRoom(r));
+    $('extendBtn').onclick = () => run(async () => {
+      const t = fromKstInput($('newOut').value);
+      if (!confirm(`${roomName(r)} 퇴실 예정 시간을 ${fmtTime(t)}(으)로 변경할까요?`)) return false;
+      await withRoomLock(r.id, () => api('PUT', `/v1/room-sale/${S.accomId}/${r.room_sale_id}`, { check_out_sched_time: t }));
+      return '퇴실 예정 시간을 변경했습니다.';
+    });
+  });
+}
+
+// 예약 상세: 객실 배정 / 배정 변경·해제 / 바로 입실
+function openReserveSheet(id, forcePicker = false) {
+  const v = { id, ...S.reserves[id] };
+  const room = roomById(v.room_id);
+  const picking = forcePicker || !room;
+  let allTypes = false;
+
+  const candidates = () => sortedRooms().filter((r) => !r.room_sale_id && (allTypes || !v.room_type_id || r.room_type_id === v.room_type_id));
+  const takenBy = (rid) => { const a = assignedReserve(rid); return a && a.id !== v.id ? a : null; };
+  const pickerHtml = () => {
+    const list = candidates();
+    return list.length ? `<div class="grid">${list.map((r) => roomCard(r, { disabled: !!takenBy(r.id) })).join('')}</div>`
+      : '<p class="empty-msg">배정 가능한 객실이 없습니다.</p>';
+  };
+
+  openSheet(`
+    <h3>${esc(v.name || '이름 없음')} 예약</h3>
+    <div class="hint">${esc(AGENTS[v.agent] || v.agent || '')} · ${esc(STAY[v.stay_type] || '')} · ${esc(typeName(v.room_type_id) || v.ota_room_name || '')}</div>
+    <dl class="kv">
+      <dt>입실 예정</dt><dd>${fmtTime(v.check_in_sched)}</dd>
+      <dt>퇴실 예정</dt><dd>${fmtTime(v.check_out_sched)}</dd>
+      <dt>요금</dt><dd>${won(v.fee)}${v.prepaid ? ` (선불 ${won(v.prepaid)})` : ''}</dd>
+      ${v.phone ? `<dt>연락처</dt><dd><a href="tel:${esc(v.phone)}">${esc(v.phone)}</a></dd>` : ''}
+      ${v.reserve_no ? `<dt>예약번호</dt><dd>${esc(v.reserve_no)}</dd>` : ''}
+      ${v.memo ? `<dt>메모</dt><dd>${esc(v.memo)}</dd>` : ''}
+      <dt>배정</dt><dd>${room ? `<b>${esc(roomName(room))}</b> (${esc(roomState(room).label)})` : '<b style="color:var(--danger)">미배정</b>'}</dd>
+    </dl>
+    ${picking ? `
+      <label class="f">객실을 누르면 이 예약이 배정됩니다</label>
+      ${v.room_type_id ? `<label class="toggle"><input type="checkbox" id="allTypes"> 다른 타입 객실도 보기</label>` : ''}
+      <div id="picker">${pickerHtml()}</div>
+    ` : `
+      <button class="btn" id="checkinNowBtn">${esc(roomName(room))} 바로 입실 처리</button>
+      <div class="row2">
+        <button class="btn secondary" id="changeBtn">배정 변경</button>
+        <button class="btn secondary" id="unassignBtn">배정 해제</button>
+      </div>
+    `}
+    <button class="btn secondary" id="closeBtn">닫기</button>
+    <div class="err" id="sheetErr"></div>
+  `, (root) => {
+    $('closeBtn').onclick = closeSheet;
+    if (!picking) {
+      $('checkinNowBtn').onclick = () => openCheckInSheet(room, v.id);
+      $('changeBtn').onclick = () => openReserveSheet(id, true);
+      $('unassignBtn').onclick = () => run(() => assignReserve(v, null));
+      return;
+    }
+    root.querySelector('#picker').addEventListener('click', (e) => {
+      const b = e.target.closest('.room');
+      if (b && !b.disabled) run(() => assignReserve(v, roomById(b.dataset.room)));
+    });
+    $('allTypes') && ($('allTypes').onchange = (e) => { allTypes = e.target.checked; $('picker').innerHTML = pickerHtml(); });
+  });
+}
+
+function openCheckInSheet(r, preReserveId = null) {
+  const type = S.types[r.room_type_id];
+  const st = roomState(r);
+  const now = Date.now();
+  const reserves = Object.entries(S.reserves).map(([id, v]) => ({ id, ...v }))
+    .filter((v) => v.state === 'GENERATED' && (!v.room_id || v.room_id === r.id || v.id === preReserveId))
+    .sort((a, b) => (a.check_in_sched || 0) - (b.check_in_sched || 0));
+  const f = { stay: 'DAYS', reserve: null, pay: 'NOT_PAID' };
+
+  openSheet(`
+    <h3>${esc(roomName(r))} 입실 처리</h3>
+    <div class="hint">${esc(type?.display_name || '')} · 현재 ${esc(st.label)}</div>
+    ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 여부를 확인하세요.</div>` : ''}
+
+    <label class="f">예약 연결</label>
+    <div id="resvList">
+      <button class="resv on" data-resv="">예약 없이 현장 입실</button>
+      ${reserves.slice(0, 30).map((v) => `
+        <button class="resv" data-resv="${esc(v.id)}">
+          ${esc(v.name || '이름 없음')} · ${esc(AGENTS[v.agent] || v.agent || '')} · ${esc(STAY[v.stay_type] || '')}
+          <small>${fmtTime(v.check_in_sched)} ~ ${fmtTime(v.check_out_sched)} · ${esc(typeName(v.room_type_id) || v.ota_room_name || '')}
+          ${v.room_id === r.id ? ' · 이 객실에 배정됨' : ''}${v.room_type_id && v.room_type_id !== r.room_type_id ? ' · 객실 타입 다름' : ''}</small>
+        </button>`).join('')}
+    </div>
+
+    <label class="f">입실 유형</label>
+    <div class="seg" id="staySeg">
+      <button data-v="DAYS" class="on">숙박</button><button data-v="HOURS">대실</button><button data-v="LONG_DAYS">장기</button>
+    </div>
+
+    <label class="f" for="outAt">퇴실 예정</label>
+    <input class="in" id="outAt" type="datetime-local">
+
+    <div class="row2">
+      <div><label class="f" for="fee">요금</label><input class="in" id="fee" type="number" inputmode="numeric" min="0"></div>
+      <div><label class="f" for="persons">인원</label><input class="in" id="persons" type="number" inputmode="numeric" min="1" value="${esc(type?.basic_capacity || 2)}"></div>
+    </div>
+
+    <label class="f">결제</label>
+    <div class="seg" id="paySeg">
+      <button data-v="NOT_PAID" class="on">미결제</button><button data-v="CASH">현금</button>
+      <button data-v="CARD">카드</button><button data-v="AGENT">OTA선불</button>
+    </div>
+
+    <div class="row2">
+      <div><label class="f" for="guest">고객명</label><input class="in" id="guest"></div>
+      <div><label class="f" for="phone">휴대폰</label><input class="in" id="phone" type="tel" inputmode="numeric" placeholder="01012345678"></div>
+    </div>
+    <label class="f" for="note">메모</label>
+    <input class="in" id="note">
+
+    <button class="btn" id="checkinBtn">입실 처리</button>
+    <button class="btn secondary" id="closeBtn">닫기</button>
+    <div class="err" id="sheetErr"></div>
+  `, (root) => {
+    const setSeg = (segId, v) => root.querySelectorAll(`#${segId} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+    const applyStay = (v, keepFee) => {
+      f.stay = v; setSeg('staySeg', v);
+      $('outAt').value = toKstInput(defaultCheckout(v, type));
+      if (!keepFee) $('fee').value = defaultFee(v, type);
+    };
+    applyStay('DAYS');
+
+    root.querySelectorAll('#staySeg button').forEach((b) => b.onclick = () => applyStay(b.dataset.v));
+    root.querySelectorAll('#paySeg button').forEach((b) => b.onclick = () => { f.pay = b.dataset.v; setSeg('paySeg', f.pay); });
+    root.querySelectorAll('#resvList .resv').forEach((b) => b.onclick = () => {
+      root.querySelectorAll('#resvList .resv').forEach((x) => x.classList.toggle('on', x === b));
+      const v = reserves.find((x) => x.id === b.dataset.resv) || null;
+      f.reserve = v;
+      if (!v) { $('guest').value = ''; $('phone').value = ''; $('note').value = ''; applyStay('DAYS'); f.pay = 'NOT_PAID'; setSeg('paySeg', f.pay); return; }
+      applyStay(v.stay_type || 'DAYS', true);
+      if (v.check_out_sched) $('outAt').value = toKstInput(v.check_out_sched);
+      $('fee').value = v.fee || defaultFee(f.stay, type);
+      $('guest').value = v.name || '';
+      $('phone').value = v.phone || '';
+      $('note').value = v.memo || '';
+      f.pay = (v.prepaid || (v.agent && v.agent !== 'FRONT')) ? 'AGENT' : 'NOT_PAID';
+      setSeg('paySeg', f.pay);
+    });
+    if (preReserveId) root.querySelector(`#resvList [data-resv="${preReserveId}"]`)?.click();
+    $('closeBtn').onclick = closeSheet;
+
+    $('checkinBtn').onclick = () => run(async () => {
+      const checkOut = fromKstInput($('outAt').value);
+      const fee = Number($('fee').value) || 0;
+      if (!(checkOut > now)) throw new Error('퇴실 예정 시간이 현재보다 이후여야 합니다.');
+      const v = f.reserve;
+      const summary = `${roomName(r)} · ${STAY[f.stay]} · 퇴실 ${fmtTime(checkOut)} · ${won(fee)}`
+        + (v ? `\n예약: ${v.name || ''} (${AGENTS[v.agent] || v.agent || ''})` : '');
+      if (!confirm(`입실 처리할까요?\n\n${summary}`)) return false;
+
+      const t = Date.now();
+      const phone = $('phone').value.replace(/\D/g, '');
+      const body = {
+        room_id: r.id,
+        activate: true,
+        stay_type: f.stay,
+        check_in_time: t,
+        check_out_sched_time: checkOut,
+        fee,
+        person_count: Number($('persons').value) || 1,
+        guest_name: $('guest').value.trim(),
+        phones: phone ? [phone] : [],
+        note: $('note').value.trim(),
+        car_no: '',
+        room_reserve_id: v ? v.id : null,
+        channel_type: 'FRONT',
+        channel_id: S.me.id,
+        breakfasts: [],
+        alarm: null,
+        ignore_power_down: false,
+        payments: buildPayments(f.pay, fee, t, v),
+      };
+      await withRoomLock(r.id, () => api('POST', `/v1/room-sale/${S.accomId}`, body));
+      return `${roomName(r)} 입실 처리했습니다.`;
+    });
+  });
+}
+
+function buildPayments(kind, fee, t, reserve) {
+  if (kind === 'NOT_PAID' || fee <= 0) return [];
+  const p = {
+    payment_date: t, channel_type: 'DEVICE', channel_id: S.me.id, type: kind, note: '원격 처리',
+    accepted_cash: 0, changed_cash: 0, not_changed_cash: 0, amount_paid_creadit_card: 0,
+    credit_card_no: '', credit_card_accepter_name: '', credit_card_approval_no: '',
+    amount_paid_agent: 0, agent_type: '', send_account: 0, account_no: '',
+    mileage_member_phone: '', use_mileage_point: 0,
+  };
+  if (kind === 'CASH') p.accepted_cash = fee;
+  if (kind === 'CARD') p.amount_paid_creadit_card = fee;
+  if (kind === 'AGENT') { p.amount_paid_agent = fee; p.agent_type = reserve?.agent || 'OTHER'; }
+  return [p];
+}
+
+// ---------- boot ----------
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('loginBtn').disabled = true;
+  $('loginErr').textContent = '';
+  try {
+    const mac = await login($('mac').value);
+    store.set('er.mac', $('rememberMac').checked ? mac : null);
+    showBoard();
+    await loadAll();
+  } catch (err) {
+    $('loginErr').textContent = err.message;
+  } finally {
+    $('loginBtn').disabled = false;
+  }
+});
+$('logoutBtn').onclick = () => { if (confirm('로그아웃할까요?')) logout(); };
+$('refreshBtn').onclick = () => loadAll();
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+$('tabResv').addEventListener('click', (e) => {
+  if (e.target.id === 'moreFuture') { S.showFuture = true; return render(); }
+  const as = e.target.closest('[data-assign]');
+  if (as) return openReserveSheet(as.dataset.assign, true);
+  const b = e.target.closest('.item');
+  if (!b) return;
+  if (b.dataset.kind === 'reserve') openReserveSheet(b.dataset.id);
+  else { const r = roomOfSale(b.dataset.id); if (r) openSaleSheet(r, S.sales[b.dataset.id]); }
+});
+$('tabOut').addEventListener('click', (e) => {
+  const co = e.target.closest('[data-checkout]');
+  if (co) return run(() => checkoutRoom(roomById(co.dataset.checkout)), co);
+  const it = e.target.closest('.item');
+  if (it) openRoom(it.dataset.room);
+});
+$('tabRooms').addEventListener('click', (e) => {
+  const b = e.target.closest('.room');
+  if (b) openRoom(b.dataset.room);
+});
+// 폴링 대신, 앱으로 다시 돌아왔을 때만 새로 불러온다.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.token && Date.now() - S.loadedAt > 30000) loadAll();
+});
+
+(function boot() {
+  try {
+    const saved = JSON.parse(store.get('er.session') || 'null');
+    if (saved && saved.token && (!saved.me?.exp || saved.me.exp > Date.now() + 60000)) {
+      Object.assign(S, saved);
+      showBoard();
+      loadAll();
+      return;
+    }
+  } catch {}
+  $('mac').value = store.get('er.mac') || '';
+  showLogin();
+})();
+</script>
+</body>
+</html>
