@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="객실 리모컨">
+<meta name="format-detection" content="telephone=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; connect-src https://api.icrew.cloud; img-src 'self' data:">
 <title>디멘션 객실 리모컨</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -17,20 +22,25 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font-family: Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-  body { padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px); }
-  button { font: inherit; cursor: pointer; color: inherit; }
+  html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+  body { padding: 0 0 calc(env(safe-area-inset-bottom) + 84px); overscroll-behavior-y: none; }
+  button { font: inherit; cursor: pointer; color: inherit; touch-action: manipulation; }
+  button:active { transform: scale(.98); }
   input, select, textarea { font: inherit; }
   .hidden { display: none !important; }
 
   header { position: sticky; top: 0; z-index: 10; background: var(--primary); color: #fff;
-    padding: 12px 16px; display: flex; align-items: center; gap: 8px; height: 60px; }
+    padding: calc(env(safe-area-inset-top) + 8px) 12px 8px 16px; display: flex; align-items: center; gap: 4px; }
   header h1 { font-size: 16px; margin: 0; flex: 1; font-weight: 700; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  header .sub { font-size: 12px; opacity: .7; font-weight: 400; display: block; }
-  .icon-btn { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff;
-    border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  header .sub { font-size: 12px; opacity: .65; font-weight: 400; display: block; }
+  .icon-btn { background: transparent; border: 0; color: #fff; width: 44px; height: 44px; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .icon-btn .ic { width: 22px; height: 22px; }
+  .icon-btn:disabled .ic { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  main { padding: 12px 16px; max-width: 960px; margin: 0 auto; }
+  main { padding: 0 12px 12px; max-width: 960px; margin: 0 auto; }
 
   /* login */
   .login { max-width: 360px; margin: 12vh auto 0; background: var(--panel); border: 1px solid var(--line);
@@ -50,15 +60,26 @@
   .err { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; white-space: pre-wrap; }
 
   /* summary + tabs */
-  .summary { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { font-size: 12px; padding: 4px 9px; border-radius: 999px; background: var(--panel);
-    border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 5px; }
+  /* 상태 칩: 눌러서 객실 필터. 가로 스크롤 한 줄 */
+  .summary { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; position: sticky;
+    top: calc(env(safe-area-inset-top) + 60px); z-index: 5; background: var(--bg); padding: 10px 12px; margin: 0 -12px; }
+  .summary::-webkit-scrollbar { display: none; }
+  .chip { font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--panel);
+    border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex: none; }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .chip.on span { color: #fff !important; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-  .tabs { display: flex; gap: 6px; position: sticky; top: 60px; z-index: 5; background: var(--bg);
-    padding: 10px 0; margin-bottom: 4px; }
-  .tabs button { flex: 1; padding: 11px 4px; border-radius: 10px; border: 1px solid var(--line); background: #fff;
-    font-size: 14px; font-weight: 600; }
-  .tabs button.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* 하단 탭바 (엄지 영역) */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; background: rgba(255,255,255,.96);
+    backdrop-filter: blur(8px); border-top: 1px solid var(--line); padding: 6px 8px calc(env(safe-area-inset-bottom) + 6px); }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 6px 4px; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; font-weight: 600; position: relative; }
+  .tabs button .ic { width: 24px; height: 24px; }
+  .tabs button.on { color: var(--primary); }
+  .tabs .cnt { position: absolute; top: 0; left: calc(50% + 8px); min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+  .tabs .cnt:empty { display: none; }
 
   /* lists */
   .sec-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 14px 0 8px; }
@@ -115,10 +136,22 @@
   /* sheet */
   .backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.45); z-index: 50; display: flex;
     align-items: flex-end; justify-content: center; }
-  .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
-    border-radius: 16px 16px 0 0; padding: 18px 16px calc(env(safe-area-inset-bottom) + 18px); }
+  .sheet { background: var(--panel); width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+    overscroll-behavior: contain; border-radius: 20px 20px 0 0; padding: 0 16px calc(env(safe-area-inset-bottom) + 16px);
+    animation: up .18s ease-out; }
+  @keyframes up { from { transform: translateY(24px); opacity: .6; } }
   @media (min-width: 640px) { .backdrop { align-items: center; } .sheet { border-radius: 16px; } }
-  .sheet h3 { margin: 0; font-size: 18px; }
+  .sheet-bar { position: sticky; top: 0; z-index: 2; background: var(--panel); display: flex; justify-content: center;
+    padding: 8px 0 4px; margin: 0 -16px; }
+  .sheet-bar .handle { width: 40px; height: 5px; border-radius: 3px; background: #d1d5db; margin-top: 2px; }
+  .sheet-x { position: absolute; right: 8px; top: 4px; width: 40px; height: 40px; border: 0; border-radius: 20px;
+    background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; }
+  .sheet-x .ic { width: 18px; height: 18px; }
+  .sheet h3 { margin: 6px 48px 0 0; font-size: 20px; }
+  /* 긴 시트에서 주요 버튼은 항상 화면 아래에 */
+  .actions { position: sticky; bottom: calc(-1 * (env(safe-area-inset-bottom) + 16px)); background: var(--panel);
+    margin: 12px -16px 0; padding: 4px 16px calc(env(safe-area-inset-bottom) + 16px); border-top: 1px solid var(--line); }
+  .actions .err { margin-top: 6px; min-height: 0; }
   .sheet .hint { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
   .seg { display: flex; gap: 6px; margin-top: 4px; }
   .seg button { flex: 1; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-size: 14px; }
@@ -134,7 +167,7 @@
   .warn { background: #fef3c7; color: #92400e; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
   .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 
-  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 20px); transform: translateX(-50%);
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); transform: translateX(-50%);
     background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 99;
     max-width: calc(100% - 32px); }
 </style>
@@ -143,8 +176,8 @@
 
 <header id="topbar" class="hidden">
   <h1><span id="accomName">객실 리모컨</span><span class="sub" id="lastLoaded"></span></h1>
-  <button class="icon-btn" id="refreshBtn">새로고침</button>
-  <button class="icon-btn" id="logoutBtn">로그아웃</button>
+  <button class="icon-btn" id="refreshBtn" data-icon="refresh" aria-label="새로고침"></button>
+  <button class="icon-btn" id="logoutBtn" data-icon="power" aria-label="로그아웃"></button>
 </header>
 
 <main>
@@ -165,9 +198,9 @@
   <section id="boardView" class="hidden">
     <div class="summary" id="summary"></div>
     <div class="tabs" id="tabs">
-      <button data-tab="rooms">객실 현황</button>
-      <button data-tab="resv">오늘 예약</button>
-      <button data-tab="out">퇴실 예정</button>
+      <button data-tab="rooms" data-icon="grid">객실 현황<span class="cnt"></span></button>
+      <button data-tab="resv" data-icon="calendar">오늘 예약<span class="cnt"></span></button>
+      <button data-tab="out" data-icon="checkout">퇴실<span class="cnt"></span></button>
     </div>
     <div id="tabRooms"></div>
     <div id="tabResv" class="hidden"></div>
@@ -197,6 +230,11 @@ const ICON_PATHS = {
   clock: 'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm56,112H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48a8,8,0,0,1,0,16Z',
   inspect: 'M232,96a72,72,0,0,1-100.94,66L79,222.22c-.12.14-.26.29-.39.42a32,32,0,0,1-45.26-45.26c.14-.13.28-.27.43-.39L94,124.94a72.07,72.07,0,0,1,83.54-98.78,8,8,0,0,1,3.93,13.19L144,80l5.66,26.35L176,112l40.65-37.52a8,8,0,0,1,13.19,3.93A72.6,72.6,0,0,1,232,96Z',
   empty: 'M232,216H208V40a16,16,0,0,0-16-16H64A16,16,0,0,0,48,40V216H24a8,8,0,0,0,0,16H232a8,8,0,0,0,0-16Zm-64,0H64V40H168Zm-40-84a12,12,0,1,1,12,12A12,12,0,0,1,128,132Z',
+  grid: 'M120,56v48a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40h48A16,16,0,0,1,120,56Zm80-16H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm-96,96H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm96,0H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Z',
+  calendar: 'M208,32H184V24a8,8,0,0,0-16,0v8H88V24a8,8,0,0,0-16,0v8H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,48H48V48H72v8a8,8,0,0,0,16,0V48h80v8a8,8,0,0,0,16,0V48h24Z',
+  refresh: 'M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1-5.66-13.66l17-17-10.55-9.65-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,1,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60l10.93,10L226.34,50.3A8,8,0,0,1,240,56Z',
+  power: 'M128,24A104,104,0,1,0,232,128,104,104,0,0,0,128,24Zm-8,40a8,8,0,0,1,16,0v64a8,8,0,0,1-16,0Zm8,144A80,80,0,0,1,83.55,61.48a8,8,0,1,1,8.9,13.29,64,64,0,1,0,71.1,0,8,8,0,1,1,8.9-13.29A80,80,0,0,1,128,208Z',
+  close: 'M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z',
 };
 const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 256 256" aria-hidden="true"><path d="${ICON_PATHS[name]}"/></svg>`;
 
@@ -218,7 +256,7 @@ const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야�
 const S = {
   token: null, me: null, accomId: DEFAULT_ACCOM_ID, accom: null,
   rooms: {}, types: {}, sales: {}, reserves: {}, interrupts: {}, loadedAt: 0, busy: false,
-  tab: 'rooms', showFuture: false,
+  tab: 'rooms', showFuture: false, filter: null,
 };
 
 // ---------- utils ----------
@@ -471,6 +509,7 @@ function setTab(tab) {
   $('tabResv').classList.toggle('hidden', tab !== 'resv');
   $('tabOut').classList.toggle('hidden', tab !== 'out');
   $('tabRooms').classList.toggle('hidden', tab !== 'rooms');
+  $('summary').classList.toggle('hidden', tab !== 'rooms');
 }
 
 // 오늘 예약: 입실 전(미배정/배정) + 오늘 예약으로 입실한 투숙
@@ -513,8 +552,15 @@ function render() {
   const rooms = sortedRooms();
   const counts = {};
   rooms.forEach((r) => { counts[r.state_summary] = (counts[r.state_summary] || 0) + 1; });
-  $('summary').innerHTML = Object.entries(STATES).filter(([k]) => counts[k])
-    .map(([k, v]) => `<span class="chip"><span style="color:${k === 'EMPTY' ? 'var(--muted)' : v.color};display:inline-flex">${icon(v.icon)}</span>${v.label} ${counts[k]}</span>`).join('');
+  const assignedCount = rooms.filter((r) => !r.room_sale_id && assignedReserve(r.id)).length;
+  if (S.filter && !counts[S.filter] && !(S.filter === 'ASSIGNED' && assignedCount)) S.filter = null;
+  const chip = (key, iconName, color, label, n) => `<button class="chip${S.filter === key ? ' on' : ''}" data-filter="${key}">
+    ${iconName ? `<span style="color:${color};display:inline-flex">${icon(iconName)}</span>` : ''}${label} ${n}</button>`;
+  $('summary').innerHTML = chip('', null, '', '전체', rooms.length)
+    + Object.entries(STATES).filter(([k]) => counts[k])
+      .map(([k, v]) => chip(k, v.icon, k === 'EMPTY' ? 'var(--muted)' : v.color, v.label, counts[k])).join('')
+    + (assignedCount ? chip('ASSIGNED', 'assigned', 'var(--blue)', '배정', assignedCount) : '');
+  $('summary').querySelector(`[data-filter="${S.filter || ''}"]`)?.classList.add('on');
 
   // 오늘 예약
   const { today, future } = reservationRows();
@@ -549,17 +595,19 @@ function render() {
     + (outLater.length ? `<div class="sec-title">내일 이후 퇴실 ${outLater.length}건</div><div class="list">${outLater.map(outItem).join('')}</div>` : '');
 
   // 객실 현황
+  const shown = rooms.filter((r) => !S.filter
+    || (S.filter === 'ASSIGNED' ? !r.room_sale_id && assignedReserve(r.id) : r.state_summary === S.filter));
   const byFloor = {};
-  rooms.forEach((r) => { (byFloor[r.floor ?? 0] ||= []).push(r); });
+  shown.forEach((r) => { (byFloor[r.floor ?? 0] ||= []).push(r); });
   $('tabRooms').innerHTML = Object.keys(byFloor).sort((a, b) => a - b).map((f) => `
     <div class="floor">${Number(f) ? f + '층' : '기타'}</div>
-    <div class="grid">${byFloor[f].map(roomCard).join('')}</div>`).join('')
-    || '<p class="empty-msg">객실 정보가 없습니다.</p>';
+    <div class="grid">${byFloor[f].map((r) => roomCard(r)).join('')}</div>`).join('')
+    || '<p class="empty-msg">해당하는 객실이 없습니다.</p>';
 
-  const tabBtn = (t) => document.querySelector(`#tabs [data-tab="${t}"]`);
-  tabBtn('resv').textContent = `오늘 예약 ${today.length}`;
-  tabBtn('out').textContent = `퇴실 ${stays.length}`;
-  tabBtn('rooms').textContent = `객실 ${rooms.length}`;
+  // 하단 탭 빨간 숫자 = 처리할 일 (미배정 예약, 오늘 퇴실)
+  const cnt = (t, n) => { document.querySelector(`#tabs [data-tab="${t}"] .cnt`).textContent = n || ''; };
+  cnt('resv', unassigned);
+  cnt('out', outToday.length);
   setTab(S.tab);
 }
 
@@ -584,8 +632,11 @@ function roomCard(r, opts = {}) {
 
 // ---------- sheets ----------
 function openSheet(html, onMount) {
-  $('sheetRoot').innerHTML = `<div class="backdrop" id="backdrop"><div class="sheet" role="dialog">${html}</div></div>`;
+  $('sheetRoot').innerHTML = `<div class="backdrop" id="backdrop"><div class="sheet" role="dialog">
+    <div class="sheet-bar"><span class="handle"></span><button class="sheet-x" id="sheetX" aria-label="닫기">${icon('close')}</button></div>
+    ${html}</div></div>`;
   $('backdrop').addEventListener('click', (e) => { if (e.target.id === 'backdrop') closeSheet(); });
+  $('sheetX').onclick = closeSheet;
   onMount && onMount($('sheetRoot').querySelector('.sheet'));
 }
 function closeSheet() { $('sheetRoot').innerHTML = ''; }
@@ -618,10 +669,8 @@ function openEmptyRoomSheet(r) {
         <button class="btn secondary" id="changeBtn">다른 객실로 변경</button>
         <button class="btn secondary" id="unassignBtn">배정 해제</button>
       </div>
-      <button class="btn secondary" id="closeBtn">닫기</button>
       <div class="err" id="sheetErr"></div>
     `, () => {
-      $('closeBtn').onclick = closeSheet;
       $('checkinNowBtn').onclick = () => openCheckInSheet(r, ar.id);
       $('changeBtn').onclick = () => openReserveSheet(ar.id, true);
       $('unassignBtn').onclick = () => run(() => assignReserve(ar, null));
@@ -639,10 +688,7 @@ function openEmptyRoomSheet(r) {
     <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
     <div class="hint">${esc(typeName(r.room_type_id))}</div>
     ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 여부를 확인하세요.</div>` : ''}
-    <div class="row2">
-      <button class="btn secondary" id="walkinBtn">현장 손님 입실</button>
-      <button class="btn secondary" id="closeBtn">닫기</button>
-    </div>
+    <button class="btn secondary" id="walkinBtn">현장 손님 입실 처리</button>
     <div class="err" id="sheetErr"></div>
     <label class="f">예약을 누르면 이 객실에 배정됩니다 (미배정 ${list.length}건)</label>
     <div id="resvPick">
@@ -650,7 +696,6 @@ function openEmptyRoomSheet(r) {
         : '<p class="empty-msg">미배정 예약이 없습니다.</p>'}
     </div>
   `, (root) => {
-    $('closeBtn').onclick = closeSheet;
     $('walkinBtn').onclick = () => openCheckInSheet(r);
     root.querySelector('#resvPick').addEventListener('click', (e) => {
       const b = e.target.closest('.resv');
@@ -682,10 +727,8 @@ function openSaleSheet(r, sale) {
       <input class="in" id="newOut" type="datetime-local" value="${toKstInput(sale.check_out_sched_time || Date.now())}">
       <button class="btn secondary" id="extendBtn" style="margin-top:0">시간 변경</button>
     </div>
-    <button class="btn secondary" id="closeBtn">닫기</button>
     <div class="err" id="sheetErr"></div>
   `, () => {
-    $('closeBtn').onclick = closeSheet;
     $('checkoutBtn').onclick = () => run(() => checkoutRoom(r));
     $('extendBtn').onclick = () => run(async () => {
       const t = fromKstInput($('newOut').value);
@@ -734,10 +777,8 @@ function openReserveSheet(id, forcePicker = false) {
         <button class="btn secondary" id="unassignBtn">배정 해제</button>
       </div>
     `}
-    <button class="btn secondary" id="closeBtn">닫기</button>
     <div class="err" id="sheetErr"></div>
   `, (root) => {
-    $('closeBtn').onclick = closeSheet;
     if (!picking) {
       $('checkinNowBtn').onclick = () => openCheckInSheet(room, v.id);
       $('changeBtn').onclick = () => openReserveSheet(id, true);
@@ -757,7 +798,9 @@ function openCheckInSheet(r, preReserveId = null) {
   const st = roomState(r);
   const now = Date.now();
   const reserves = Object.entries(S.reserves).map(([id, v]) => ({ id, ...v }))
-    .filter((v) => v.state === 'GENERATED' && (!v.room_id || v.room_id === r.id || v.id === preReserveId))
+    // 이 객실에 배정된 예약 + 오늘 입실 예정인 미배정 예약만 (미래 예약은 '오늘 예약' 탭에서)
+    .filter((v) => v.state === 'GENERATED' && (v.room_id === r.id || v.id === preReserveId
+      || (!v.room_id && (v.check_in_sched || 0) < todayEnd())))
     .sort((a, b) => (a.check_in_sched || 0) - (b.check_in_sched || 0));
   const f = { stay: 'DAYS', reserve: null, pay: 'NOT_PAID' };
 
@@ -766,10 +809,10 @@ function openCheckInSheet(r, preReserveId = null) {
     <div class="hint">${esc(type?.display_name || '')} · 현재 ${esc(st.label)}</div>
     ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 여부를 확인하세요.</div>` : ''}
 
-    <label class="f">예약 연결</label>
-    <div id="resvList">
+    ${reserves.length ? '<label class="f">예약 연결 (오늘 입실 예약)</label>' : ''}
+    <div id="resvList"${reserves.length ? '' : ' class="hidden"'}>
       <button class="resv on" data-resv="">예약 없이 현장 입실</button>
-      ${reserves.slice(0, 30).map((v) => `
+      ${reserves.slice(0, 15).map((v) => `
         <button class="resv" data-resv="${esc(v.id)}">
           ${esc(v.name || '이름 없음')} · ${esc(AGENTS[v.agent] || v.agent || '')} · ${esc(STAY[v.stay_type] || '')}
           <small>${fmtTime(v.check_in_sched)} ~ ${fmtTime(v.check_out_sched)} · ${esc(typeName(v.room_type_id) || v.ota_room_name || '')}
@@ -803,9 +846,10 @@ function openCheckInSheet(r, preReserveId = null) {
     <label class="f" for="note">메모</label>
     <input class="in" id="note">
 
-    <button class="btn" id="checkinBtn">입실 처리</button>
-    <button class="btn secondary" id="closeBtn">닫기</button>
-    <div class="err" id="sheetErr"></div>
+    <div class="actions">
+      <div class="err" id="sheetErr"></div>
+      <button class="btn" id="checkinBtn">입실 처리</button>
+    </div>
   `, (root) => {
     const setSeg = (segId, v) => root.querySelectorAll(`#${segId} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === v));
     const applyStay = (v, keepFee) => {
@@ -832,7 +876,6 @@ function openCheckInSheet(r, preReserveId = null) {
       setSeg('paySeg', f.pay);
     });
     if (preReserveId) root.querySelector(`#resvList [data-resv="${preReserveId}"]`)?.click();
-    $('closeBtn').onclick = closeSheet;
 
     $('checkinBtn').onclick = () => run(async () => {
       const checkOut = fromKstInput($('outAt').value);
@@ -904,7 +947,20 @@ $('loginForm').addEventListener('submit', async (e) => {
 });
 $('logoutBtn').onclick = () => { if (confirm('로그아웃할까요?')) logout(); };
 $('refreshBtn').onclick = () => loadAll();
-$('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+$('tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.tab === S.tab) window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTab(b.dataset.tab);
+});
+$('summary').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-filter]');
+  if (!c) return;
+  S.filter = c.dataset.filter && c.dataset.filter !== S.filter ? c.dataset.filter : null;
+  render();
+  window.scrollTo({ top: 0 });
+});
+document.querySelectorAll('[data-icon]').forEach((el) => el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon)));
 $('tabResv').addEventListener('click', (e) => {
   if (e.target.id === 'moreFuture') { S.showFuture = true; return render(); }
   const as = e.target.closest('[data-assign]');
