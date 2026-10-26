@@ -132,6 +132,13 @@
   .room.occupied .lock { color: #fecaca; }
   .act .ic { margin-right: 4px; }
   .room:disabled { opacity: .4; }
+  .room .keyln { font-size: 11px; margin-top: 2px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .kb { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: #f3f4f6; color: #374151; }
+  .kb.ready { background: #dcfce7; color: #15803d; }
+  .kb.guest { background: #fee2e2; color: #b91c1c; }
+  .room.occupied .kb { background: rgba(255,255,255,.2); color: #fff; }
+  .room .note { font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 2px; }
+  .btn.green { background: #059669; }
 
   /* sheet */
   .backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.45); z-index: 50; display: flex;
@@ -199,7 +206,7 @@
     <div class="summary" id="summary"></div>
     <div class="tabs" id="tabs">
       <button data-tab="rooms" data-icon="grid">객실 현황<span class="cnt"></span></button>
-      <button data-tab="resv" data-icon="calendar">오늘 예약<span class="cnt"></span></button>
+      <button data-tab="resv" data-icon="calendar">예약<span class="cnt"></span></button>
       <button data-tab="out" data-icon="checkout">퇴실<span class="cnt"></span></button>
     </div>
     <div id="tabRooms"></div>
@@ -247,6 +254,9 @@ const STATES = {
   INSPECT_ORDER: { label: '점검요청', color: 'var(--st-inspect)',     icon: 'inspect' },
   INSPECTING:    { label: '점검중',   color: 'var(--st-inspect)',     icon: 'inspect' },
 };
+// 객실 카드키 꽂힘 상태 (객실 안 키홀더 기준)
+const KEY = { EMPTY: '키 없음', GUEST: '손님키 꽂힘', CLEAN: '청소키 꽂힘', INSPACT: '점검키 꽂힘' };
+const KEY_CFG = 'key_ready'; // 프론트 키 준비 여부 (앱 전용 설정에 저장)
 const STAY = { HOURS: '대실', DAYS: '숙박', LONG_DAYS: '장기', OTHER: '기타' };
 const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야놀자호텔', GOOD_CHOICE: '여기어때',
   GOOD_CHOICE_HOTEL: '여기어때호텔', AGODA: '아고다', EXPEDIA: '익스피디아', AIR_BNB: '에어비앤비',
@@ -256,7 +266,7 @@ const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야�
 const S = {
   token: null, me: null, accomId: DEFAULT_ACCOM_ID, accom: null,
   rooms: {}, types: {}, sales: {}, reserves: {}, interrupts: {}, loadedAt: 0, busy: false,
-  tab: 'rooms', showFuture: false, filter: null,
+  keyReady: {}, tab: 'rooms', showFuture: true, filter: null,
 };
 
 // ---------- utils ----------
@@ -337,11 +347,21 @@ const roomOfSale = (saleId) => {
   const e = Object.entries(S.rooms).find(([, r]) => r.room_sale_id === saleId);
   return e ? { id: e[0], ...e[1] } : null;
 };
-// 공실에 배정되어 입실 대기 중인 예약
-const assignedReserve = (roomId) => {
-  const e = Object.entries(S.reserves).find(([, v]) => v.state === 'GENERATED' && v.room_id === roomId);
-  return e ? { id: e[0], ...e[1] } : null;
-};
+// 객실에 배정되어 입실 대기 중인 예약 (입실 시간 순). 미리 배정하면 여러 건일 수 있다.
+const assignedReserves = (roomId) => Object.entries(S.reserves).map(([id, v]) => ({ id, ...v }))
+  .filter((v) => v.state === 'GENERATED' && v.room_id === roomId)
+  .sort((a, b) => (a.check_in_sched || 0) - (b.check_in_sched || 0));
+const assignedReserve = (roomId) => assignedReserves(roomId)[0] || null;
+const isToday = (ms) => (ms || 0) < todayEnd();
+const resvOut = (v) => v.check_out_sched || ((v.check_in_sched || 0) + DAY);
+// 이 예약을 이 객실에 넣을 수 없는 이유 (기간 겹침). 없으면 null
+function roomConflict(room, v) {
+  const vin = v.check_in_sched || Date.now(), vout = resvOut(v);
+  const sale = room.room_sale_id ? S.sales[room.room_sale_id] : null;
+  if (sale && (sale.check_out_sched_time || Infinity) > vin) return `${fmtTime(sale.check_out_sched_time)} 퇴실 예정`;
+  const other = assignedReserves(room.id).find((x) => x.id !== v.id && (x.check_in_sched || 0) < vout && vin < resvOut(x));
+  return other ? `${other.name || '예약'} 배정됨` : null;
+}
 const saleAgent = (s) => (s.payments || []).map((p) => p.agent_type).find(Boolean) || '';
 const sortedRooms = () => Object.entries(S.rooms).map(([id, r]) => ({ id, ...r }))
   .sort((a, b) => (a.floor - b.floor) || roomName(a).localeCompare(roomName(b), 'ko', { numeric: true }));
@@ -411,13 +431,14 @@ async function loadAll({ force = false } = {}) {
   try {
     const a = S.accomId;
     const needStatic = !S.accom || !Object.keys(S.types).length || Date.now() - (S.staticAt || 0) > STATIC_TTL_MS;
-    const [rooms, sales, reserves, interrupts, accom, types] = await Promise.all([
+    const [rooms, sales, reserves, interrupts, accom, types, keyCfg] = await Promise.all([
       api('GET', `/v1/room/all-by-accom/${a}`),
       api('GET', `/v1/room-sale/all-activated/${a}`),
       api('GET', `/v1/room-reserve/all-by-reserved/${a}`).catch(() => ({ room_reserves: {} })),
       api('GET', `/v1/room-interrupt/all-by-accom/${a}`).catch(() => ({ room_interrupts: {} })),
       needStatic ? api('GET', `/v1/accom/${a}`) : null,
       needStatic ? api('GET', `/v1/room-type/all-by-accom/${a}`) : null,
+      api('GET', `/v1/custom-config/${a}/${APP_ID}/${KEY_CFG}`).catch(() => null),
     ]);
     if (needStatic) {
       S.accom = asMap(pick(accom, 'accoms'))[a] || pick(accom, 'accom');
@@ -428,6 +449,7 @@ async function loadAll({ force = false } = {}) {
     S.sales = asMap(pick(sales, 'room_sales'));
     S.reserves = asMap(pick(reserves, 'room_reserves'));
     S.interrupts = asMap(pick(interrupts, 'room_interrupts'));
+    S.keyReady = parseKeyCfg(keyCfg);
     S.loadedAt = Date.now();
     render();
   } catch (e) {
@@ -455,14 +477,43 @@ async function checkoutRoom(r) {
   await withRoomLock(r.id, () => api('PUT', `/v1/room-sale/${S.accomId}/${r.room_sale_id}`, {
     activate: false, check_out_time: Date.now(),
   }));
+  await resetKeyReady(r.id);
   return `${roomName(r)} 퇴실 처리했습니다.`;
 }
+
+// 청소 완료: 청소요청/청소중/점검 상태를 공실로
+async function clearRoom(r) {
+  if (!confirm(`${roomName(r)} 청소 완료 처리할까요?\n객실이 공실로 바뀝니다.`)) return false;
+  await withRoomLock(r.id, () => api('PUT', `/v1/room/${S.accomId}/${r.id}`, { request_state_clear: true }));
+  return `${roomName(r)} 공실로 바꿨습니다.`;
+}
+
+// 프론트 키 준비 여부 (이글에 해당 값이 없어 앱 전용 설정에 저장)
+function parseKeyCfg(res) {
+  if (!res || typeof res !== 'object') return {};
+  if (res.rooms && typeof res.rooms === 'object') return res.rooms;
+  for (const v of Object.values(res)) if (v && typeof v === 'object' && v.rooms) return v.rooms;
+  return {};
+}
+async function saveKeyReady(next) {
+  await api('POST', `/v1/custom-config/${S.accomId}/${APP_ID}/${KEY_CFG}`, { rooms: next });
+  S.keyReady = next;
+}
+async function setKeyReady(r, ready) {
+  const next = { ...S.keyReady };
+  if (ready) next[r.id] = { at: Date.now() }; else delete next[r.id];
+  await saveKeyReady(next);
+  return ready ? `${roomName(r)} 키 준비 완료로 표시했습니다.` : `${roomName(r)} 키 준비 표시를 해제했습니다.`;
+}
+// 입실·퇴실 후엔 키 준비 표시를 지운다 (실패해도 본 처리에는 영향 없음)
+const resetKeyReady = (roomId) => S.keyReady[roomId] ? setKeyReady({ id: roomId }, false).catch(() => {}) : null;
 
 // 예약에 객실 지정 (입실은 고객이 키오스크/QR로 하거나 '바로 입실'로 처리)
 async function assignReserve(v, room) {
   const msg = room
     ? `${v.name || '예약'} 예약을 ${roomName(room)}에 배정할까요?` +
-      (v.room_type_id && room.room_type_id !== v.room_type_id ? `\n\n예약 타입(${typeName(v.room_type_id)})과 객실 타입(${typeName(room.room_type_id)})이 다릅니다.` : '')
+      (v.room_type_id && room.room_type_id !== v.room_type_id ? `\n\n예약 타입(${typeName(v.room_type_id)})과 객실 타입(${typeName(room.room_type_id)})이 다릅니다.` : '') +
+      (!isToday(v.check_in_sched) ? `\n\n※ 미리 배정하면 입실 전까지 이 객실은 키오스크·현장 판매가 막힐 수 있습니다.` : '')
     : `${v.name || '예약'} 예약의 객실 배정을 해제할까요?`;
   if (!confirm(msg)) return false;
   const body = { room_id: room ? room.id : null };
@@ -536,13 +587,24 @@ function reservationRows() {
 
 function reserveItem(r) {
   const badge = r.status === 'unassigned' ? `<button class="act blue" data-assign="${esc(r.id)}">${icon('assigned')}배정</button>`
-    : r.status === 'assigned' ? `<span class="badge b-assigned">${icon('assigned')} ${esc(roomName(r.room))}</span>`
+    : r.status === 'assigned' ? `<button class="badge b-assigned" style="border:0" data-assign="${esc(r.id)}">${icon('assigned')} ${esc(roomName(r.room))}</button>`
     : `<span class="badge b-in">${icon('using')} ${esc(roomName(r.room))}</span>`;
   return `<div class="item" data-kind="${r.kind}" data-id="${esc(r.id)}">
     <div class="main">
       <div class="t1">${esc(r.name || '이름 없음')} <span style="font-weight:500;color:var(--muted)">· ${esc(AGENTS[r.agent] || r.agent || '현장')}</span></div>
       <div class="t2">${r.status === 'unassigned' ? '<span style="color:var(--danger);font-weight:700">미배정</span> · ' : ''}${esc(STAY[r.stay] || '')} · ${esc(typeName(r.type) || r.ota || '타입 미정')}<br>${fmtTime(r.in)} → ${fmtTime(r.out)}</div>
     </div>${badge}</div>`;
+}
+
+// 내일 이후 예약: 날짜별로 묶어서 미리 배정
+function futureHtml(rows) {
+  const days = {};
+  rows.forEach((r) => { const d = new Date((r.at || 0) + KST); (days[`${d.getUTCMonth() + 1}/${d.getUTCDate()} (${'일월화수목금토'[d.getUTCDay()]})`] ||= []).push(r); });
+  return Object.entries(days).map(([d, list]) => {
+    const un = list.filter((r) => r.status === 'unassigned').length;
+    return `<div class="sec-title">${d} 입실 ${list.length}건${un ? ` · <span style="color:var(--danger)">미배정 ${un}건</span>` : ' · 모두 배정됨'}</div>
+      <div class="list">${list.map(reserveItem).join('')}</div>`;
+  }).join('');
 }
 
 function render() {
@@ -568,8 +630,7 @@ function render() {
   $('tabResv').innerHTML = (today.length
     ? `<div class="sec-title">오늘 입실 ${today.length}건${unassigned ? ` · 미배정 ${unassigned}건` : ''}</div><div class="list">${today.map(reserveItem).join('')}</div>`
     : '<p class="empty-msg">오늘 입실 예약이 없습니다.</p>')
-    + (future.length ? (S.showFuture
-      ? `<div class="sec-title">내일 이후 ${future.length}건</div><div class="list">${future.map(reserveItem).join('')}</div>`
+    + (future.length ? (S.showFuture ? futureHtml(future)
       : `<button class="more" id="moreFuture">내일 이후 예약 ${future.length}건 보기</button>`) : '');
 
   // 퇴실 예정
@@ -614,7 +675,11 @@ function render() {
 function roomCard(r, opts = {}) {
   const st = roomState(r);
   const sale = r.room_sale_id ? S.sales[r.room_sale_id] : null;
-  const ar = !sale && assignedReserve(r.id);
+  const next = assignedReserve(r.id);
+  const ar = !sale && next;
+  const kr = S.keyReady[r.id];
+  const keyHtml = (kr || (r.key && r.key !== 'EMPTY'))
+    ? `<div class="keyln">${kr ? '<span class="kb ready">키 준비</span>' : ''}${r.key && r.key !== 'EMPTY' ? `<span class="kb${r.key === 'GUEST' ? ' guest' : ''}">${esc(KEY[r.key] || r.key)}</span>` : ''}</div>` : '';
   const cls = sale ? ` occupied${r.state_summary === 'OUTING' ? ' outing' : ''}`
     : ar ? ' has-resv'
     : (r.state_summary === 'CLEAN_ORDER' || r.state_summary === 'CLEANING') ? ' clean' : '';
@@ -626,7 +691,10 @@ function roomCard(r, opts = {}) {
     <div class="st">${icon(ar ? 'assigned' : st.icon)}${esc(st.label)}</div>
     ${sale ? `<div class="guest">${esc(sale.guest_name || '이름 없음')}</div>
       <div class="until">${esc(STAY[sale.stay_type] || '')} ~${fmtTime(sale.check_out_sched_time)}</div>` : ''}
-    ${ar ? `<div class="assigned">배정: ${esc(ar.name || '예약')}</div><div class="until">${fmtClock(ar.check_in_sched)} 입실 예정</div>` : ''}
+    ${ar ? `<div class="assigned">배정: ${esc(ar.name || '예약')}</div><div class="until">${isToday(ar.check_in_sched) ? fmtClock(ar.check_in_sched) : fmtTime(ar.check_in_sched)} 입실 예정</div>` : ''}
+    ${sale && next ? `<div class="until">다음: ${esc(next.name || '예약')} ${fmtTime(next.check_in_sched)}</div>` : ''}
+    ${keyHtml}
+    ${opts.note ? `<div class="note">${esc(opts.note)}</div>` : ''}
   </button>`;
 }
 
@@ -649,31 +717,54 @@ function openRoom(roomId) {
   openEmptyRoomSheet(r);
 }
 
+// 객실 공통: 청소 완료 + 키 상태/키 준비
+function roomToolsHtml(r) {
+  const needClear = !r.room_sale_id && r.state_summary && r.state_summary !== 'EMPTY';
+  const kr = S.keyReady[r.id];
+  return `${needClear ? `<button class="btn green" id="clearBtn">${icon('cleaning')} 청소 완료 → 공실로</button>` : ''}
+    <dl class="kv">
+      <dt>객실 키</dt><dd>${esc(KEY[r.key] || r.key || '-')}${r.last_key_changed_time ? ` <small style="color:var(--muted)">(${fmtTime(r.last_key_changed_time)})</small>` : ''}</dd>
+      <dt>키 준비</dt><dd>${kr ? `<b style="color:#15803d">준비됨</b> <small style="color:var(--muted)">(${fmtTime(kr.at)})</small>` : '<b style="color:var(--danger)">미준비</b>'}</dd>
+    </dl>
+    <button class="btn secondary" id="keyBtn">${kr ? '키 준비 해제' : '키 준비 완료로 표시'}</button>`;
+}
+function bindRoomTools(r) {
+  $('clearBtn') && ($('clearBtn').onclick = (e) => run(() => clearRoom(r), e.currentTarget));
+  $('keyBtn').onclick = (e) => run(() => setKeyReady(r, !S.keyReady[r.id]), e.currentTarget);
+}
+
 // 공실: 예약 배정이 기본, 현장 손님은 바로 입실
 function openEmptyRoomSheet(r) {
   const st = roomState(r);
-  const ar = assignedReserve(r.id);
+  const ars = assignedReserves(r.id);
+  const ar = ars[0] || null;
   const end = todayEnd();
   const resvLine = (v) => `${esc(v.name || '이름 없음')} · ${esc(AGENTS[v.agent] || v.agent || '')} · ${esc(STAY[v.stay_type] || '')}
     <small>${fmtTime(v.check_in_sched)} ~ ${fmtTime(v.check_out_sched)} · ${esc(typeName(v.room_type_id) || v.ota_room_name || '')}
     ${v.room_type_id && v.room_type_id !== r.room_type_id ? ' · 객실 타입 다름' : ''}</small>`;
 
   if (ar) {
+    const today = isToday(ar.check_in_sched);
     openSheet(`
       <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
       <div class="hint">${esc(typeName(r.room_type_id))}</div>
-      <label class="f">배정된 예약</label>
-      <div class="resv on">${resvLine(ar)}</div>
-      <button class="btn" id="checkinNowBtn">바로 입실 처리</button>
+      ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 완료 후 공실로 바꾸세요.</div>` : ''}
+      ${roomToolsHtml(r)}
+      <label class="f">배정된 예약${ars.length > 1 ? ` (${ars.length}건)` : ''}</label>
+      ${ars.map((v) => `<button class="resv${v.id === ar.id ? ' on' : ''}" data-resv="${esc(v.id)}">${resvLine(v)}</button>`).join('')}
+      ${today ? '' : '<div class="warn">미리 배정된 예약입니다. 입실 전까지 이 객실은 키오스크·현장 판매가 막힐 수 있습니다.</div>'}
+      ${today ? '<button class="btn" id="checkinNowBtn">바로 입실 처리</button>' : ''}
       <div class="row2">
         <button class="btn secondary" id="changeBtn">다른 객실로 변경</button>
         <button class="btn secondary" id="unassignBtn">배정 해제</button>
       </div>
       <div class="err" id="sheetErr"></div>
-    `, () => {
-      $('checkinNowBtn').onclick = () => openCheckInSheet(r, ar.id);
+    `, (root) => {
+      bindRoomTools(r);
+      $('checkinNowBtn') && ($('checkinNowBtn').onclick = () => openCheckInSheet(r, ar.id));
       $('changeBtn').onclick = () => openReserveSheet(ar.id, true);
       $('unassignBtn').onclick = () => run(() => assignReserve(ar, null));
+      root.querySelectorAll('[data-resv]').forEach((b) => b.onclick = () => openReserveSheet(b.dataset.resv));
     });
     return;
   }
@@ -687,19 +778,22 @@ function openEmptyRoomSheet(r) {
   openSheet(`
     <h3>${esc(roomName(r))} · ${esc(st.label)}</h3>
     <div class="hint">${esc(typeName(r.room_type_id))}</div>
-    ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소 여부를 확인하세요.</div>` : ''}
+    ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소가 끝났으면 공실로 바꾸세요.</div>` : ''}
+    ${roomToolsHtml(r)}
     <button class="btn secondary" id="walkinBtn">현장 손님 입실 처리</button>
     <div class="err" id="sheetErr"></div>
     <label class="f">예약을 누르면 이 객실에 배정됩니다 (미배정 ${list.length}건)</label>
     <div id="resvPick">
-      ${list.length ? list.slice(0, 40).map((v) => `<button class="resv" data-resv="${esc(v.id)}">${resvLine(v)}</button>`).join('')
+      ${list.length ? list.slice(0, 40).map((v) => { const c = roomConflict(r, v);
+        return `<button class="resv" data-resv="${esc(v.id)}"${c ? ' disabled style="opacity:.45"' : ''}>${resvLine(v)}${c ? `<small style="color:var(--danger)">겹침: ${esc(c)}</small>` : ''}</button>`; }).join('')
         : '<p class="empty-msg">미배정 예약이 없습니다.</p>'}
     </div>
   `, (root) => {
+    bindRoomTools(r);
     $('walkinBtn').onclick = () => openCheckInSheet(r);
     root.querySelector('#resvPick').addEventListener('click', (e) => {
       const b = e.target.closest('.resv');
-      const v = b && list.find((x) => x.id === b.dataset.resv);
+      const v = b && !b.disabled && list.find((x) => x.id === b.dataset.resv);
       if (v) run(() => assignReserve(v, r));
     });
   });
@@ -720,7 +814,9 @@ function openSaleSheet(r, sale) {
       <dt>인원</dt><dd>${esc(sale.person_count || '-')}명</dd>
       ${sale.phones?.length ? `<dt>연락처</dt><dd><a href="tel:${esc(sale.phones[0])}">${esc(sale.phones[0])}</a></dd>` : ''}
       ${sale.note ? `<dt>메모</dt><dd>${esc(sale.note)}</dd>` : ''}
+      ${assignedReserve(r.id) ? `<dt>다음 예약</dt><dd>${esc(assignedReserve(r.id).name || '예약')} · ${fmtTime(assignedReserve(r.id).check_in_sched)} 입실</dd>` : ''}
     </dl>
+    ${roomToolsHtml(r)}
     <button class="btn danger" id="checkoutBtn">${icon('checkout')} 퇴실 처리</button>
     <label class="f" for="newOut">퇴실 예정 시간 변경</label>
     <div class="row2">
@@ -729,6 +825,7 @@ function openSaleSheet(r, sale) {
     </div>
     <div class="err" id="sheetErr"></div>
   `, () => {
+    bindRoomTools(r);
     $('checkoutBtn').onclick = () => run(() => checkoutRoom(r));
     $('extendBtn').onclick = () => run(async () => {
       const t = fromKstInput($('newOut').value);
@@ -746,11 +843,13 @@ function openReserveSheet(id, forcePicker = false) {
   const picking = forcePicker || !room;
   let allTypes = false;
 
-  const candidates = () => sortedRooms().filter((r) => !r.room_sale_id && (allTypes || !v.room_type_id || r.room_type_id === v.room_type_id));
-  const takenBy = (rid) => { const a = assignedReserve(rid); return a && a.id !== v.id ? a : null; };
+  // 미리 배정: 지금 사용중인 객실도 예약 입실 전에 퇴실 예정이면 배정 가능
+  const candidates = () => sortedRooms().filter((r) => allTypes || !v.room_type_id || r.room_type_id === v.room_type_id);
   const pickerHtml = () => {
-    const list = candidates();
-    return list.length ? `<div class="grid">${list.map((r) => roomCard(r, { disabled: !!takenBy(r.id) })).join('')}</div>`
+    const list = candidates().map((r) => ({ r, c: r.id === v.room_id ? null : roomConflict(r, v) }))
+      .sort((a, b) => (!!a.c - !!b.c));
+    const ok = list.filter((x) => !x.c).length;
+    return list.length ? `<div class="hint">배정 가능 ${ok}실</div><div class="grid">${list.map((x) => roomCard(x.r, { disabled: !!x.c, note: x.c, selected: x.r.id === v.room_id })).join('')}</div>`
       : '<p class="empty-msg">배정 가능한 객실이 없습니다.</p>';
   };
 
@@ -766,12 +865,13 @@ function openReserveSheet(id, forcePicker = false) {
       ${v.memo ? `<dt>메모</dt><dd>${esc(v.memo)}</dd>` : ''}
       <dt>배정</dt><dd>${room ? `<b>${esc(roomName(room))}</b> (${esc(roomState(room).label)})` : '<b style="color:var(--danger)">미배정</b>'}</dd>
     </dl>
+    ${!isToday(v.check_in_sched) ? '<div class="warn">미리 배정입니다. 입실 전까지 배정한 객실은 키오스크·현장 판매가 막힐 수 있습니다.</div>' : ''}
     ${picking ? `
       <label class="f">객실을 누르면 이 예약이 배정됩니다</label>
       ${v.room_type_id ? `<label class="toggle"><input type="checkbox" id="allTypes"> 다른 타입 객실도 보기</label>` : ''}
       <div id="picker">${pickerHtml()}</div>
     ` : `
-      <button class="btn" id="checkinNowBtn">${esc(roomName(room))} 바로 입실 처리</button>
+      ${isToday(v.check_in_sched) && !room.room_sale_id ? `<button class="btn" id="checkinNowBtn">${esc(roomName(room))} 바로 입실 처리</button>` : ''}
       <div class="row2">
         <button class="btn secondary" id="changeBtn">배정 변경</button>
         <button class="btn secondary" id="unassignBtn">배정 해제</button>
@@ -780,14 +880,14 @@ function openReserveSheet(id, forcePicker = false) {
     <div class="err" id="sheetErr"></div>
   `, (root) => {
     if (!picking) {
-      $('checkinNowBtn').onclick = () => openCheckInSheet(room, v.id);
+      $('checkinNowBtn') && ($('checkinNowBtn').onclick = () => openCheckInSheet(room, v.id));
       $('changeBtn').onclick = () => openReserveSheet(id, true);
       $('unassignBtn').onclick = () => run(() => assignReserve(v, null));
       return;
     }
     root.querySelector('#picker').addEventListener('click', (e) => {
       const b = e.target.closest('.room');
-      if (b && !b.disabled) run(() => assignReserve(v, roomById(b.dataset.room)));
+      if (b && !b.disabled && b.dataset.room !== v.room_id) run(() => assignReserve(v, roomById(b.dataset.room)));
     });
     $('allTypes') && ($('allTypes').onchange = (e) => { allTypes = e.target.checked; $('picker').innerHTML = pickerHtml(); });
   });
@@ -799,7 +899,7 @@ function openCheckInSheet(r, preReserveId = null) {
   const now = Date.now();
   const reserves = Object.entries(S.reserves).map(([id, v]) => ({ id, ...v }))
     // 이 객실에 배정된 예약 + 오늘 입실 예정인 미배정 예약만 (미래 예약은 '오늘 예약' 탭에서)
-    .filter((v) => v.state === 'GENERATED' && (v.room_id === r.id || v.id === preReserveId
+    .filter((v) => v.state === 'GENERATED' && ((v.room_id === r.id && isToday(v.check_in_sched)) || v.id === preReserveId
       || (!v.room_id && (v.check_in_sched || 0) < todayEnd())))
     .sort((a, b) => (a.check_in_sched || 0) - (b.check_in_sched || 0));
   const f = { stay: 'DAYS', reserve: null, pay: 'NOT_PAID' };
@@ -909,6 +1009,7 @@ function openCheckInSheet(r, preReserveId = null) {
         payments: buildPayments(f.pay, fee, t, v),
       };
       await withRoomLock(r.id, () => api('POST', `/v1/room-sale/${S.accomId}`, body));
+      await resetKeyReady(r.id);
       return `${roomName(r)} 입실 처리했습니다.`;
     });
   });
