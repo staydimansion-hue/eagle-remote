@@ -172,6 +172,14 @@
   .resv.on { border-color: var(--primary); outline: 2px solid var(--primary); }
   .resv small { color: var(--muted); display: block; margin-top: 2px; }
   .warn { background: #fef3c7; color: #92400e; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .stops { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stop { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px 4px; text-align: center;
+    display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+  .stop span { font-size: 12px; color: #15803d; font-weight: 600; }
+  .stop.on { background: #fee2e2; border-color: #fca5a5; }
+  .stop.on span { color: #b91c1c; }
+  .room .stopped { font-size: 10px; font-weight: 700; color: #b91c1c; margin-top: 3px; }
+  .room.occupied .stopped { color: #fecaca; }
   .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 
   .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); transform: translateX(-50%);
@@ -694,8 +702,29 @@ function roomCard(r, opts = {}) {
     ${ar ? `<div class="assigned">배정: ${esc(ar.name || '예약')}</div><div class="until">${isToday(ar.check_in_sched) ? fmtClock(ar.check_in_sched) : fmtTime(ar.check_in_sched)} 입실 예정</div>` : ''}
     ${sale && next ? `<div class="until">다음: ${esc(next.name || '예약')} ${fmtTime(next.check_in_sched)}</div>` : ''}
     ${keyHtml}
+    ${KIOSK_STOPS.some((s) => r[s.key]) ? `<div class="stopped">${KIOSK_STOPS.filter((s) => r[s.key]).map((s) => s.short).join('·')} 중단</div>` : ''}
     ${opts.note ? `<div class="note">${esc(opts.note)}</div>` : ''}
   </button>`;
+}
+
+// 이글 '키오스크' 설정과 같은 객실별 판매 중단 (켜면 키오스크에서 해당 판매를 막는다)
+const KIOSK_STOPS = [
+  { key: 'kiosk_hours_sale_stop', label: '워크인 대실', short: '대실' },
+  { key: 'kiosk_days_sale_stop', label: '워크인 숙박', short: '숙박' },
+  { key: 'kiosk_reserve_sale_stop', label: '예약 입실', short: '예약' },
+];
+function kioskStopHtml(r) {
+  return `<label class="f">키오스크 판매 (누르면 중단/재개)</label>
+    <div class="stops">${KIOSK_STOPS.map((s) => `<button class="stop${r[s.key] ? ' on' : ''}" data-stop="${s.key}" data-room="${esc(r.id)}">
+      <b>${s.label}</b><span>${r[s.key] ? '중단됨' : '판매중'}</span></button>`).join('')}</div>`;
+}
+async function toggleKioskStop(roomId, key) {
+  const r = roomById(roomId);
+  const s = KIOSK_STOPS.find((x) => x.key === key);
+  const next = !r[key];
+  if (!confirm(`${roomName(r)} 키오스크 ${s.label}을(를) ${next ? '중단' : '다시 판매'}할까요?`)) return false;
+  await api('PUT', `/v1/room/${S.accomId}/${roomId}`, { [key]: next });
+  return `${roomName(r)} ${s.label} ${next ? '중단' : '판매 재개'}했습니다.`;
 }
 
 // ---------- sheets ----------
@@ -758,6 +787,7 @@ function openEmptyRoomSheet(r) {
         <button class="btn secondary" id="changeBtn">다른 객실로 변경</button>
         <button class="btn secondary" id="unassignBtn">배정 해제</button>
       </div>
+      ${kioskStopHtml(r)}
       <div class="err" id="sheetErr"></div>
     `, (root) => {
       bindRoomTools(r);
@@ -781,6 +811,7 @@ function openEmptyRoomSheet(r) {
     ${r.state_summary !== 'EMPTY' ? `<div class="warn">이 객실은 지금 '${esc(st.label)}' 상태입니다. 청소가 끝났으면 공실로 바꾸세요.</div>` : ''}
     ${roomToolsHtml(r)}
     <button class="btn secondary" id="walkinBtn">현장 손님 입실 처리</button>
+    ${kioskStopHtml(r)}
     <div class="err" id="sheetErr"></div>
     <label class="f">예약을 누르면 이 객실에 배정됩니다 (미배정 ${list.length}건)</label>
     <div id="resvPick">
@@ -823,6 +854,7 @@ function openSaleSheet(r, sale) {
       <input class="in" id="newOut" type="datetime-local" value="${toKstInput(sale.check_out_sched_time || Date.now())}">
       <button class="btn secondary" id="extendBtn" style="margin-top:0">시간 변경</button>
     </div>
+    ${kioskStopHtml(r)}
     <div class="err" id="sheetErr"></div>
   `, () => {
     bindRoomTools(r);
@@ -1076,6 +1108,10 @@ $('tabOut').addEventListener('click', (e) => {
   if (co) return run(() => checkoutRoom(roomById(co.dataset.checkout)), co);
   const it = e.target.closest('.item');
   if (it) openRoom(it.dataset.room);
+});
+$('sheetRoot').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-stop]');
+  if (b) run(() => toggleKioskStop(b.dataset.room, b.dataset.stop), b);
 });
 $('tabRooms').addEventListener('click', (e) => {
   const b = e.target.closest('.room');
