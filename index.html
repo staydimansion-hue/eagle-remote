@@ -134,7 +134,8 @@
   .room:disabled { opacity: .4; }
   .room .keyln { font-size: 11px; margin-top: 2px; display: flex; gap: 4px; flex-wrap: wrap; }
   .kb { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: #f3f4f6; color: #374151; }
-  .kb.ready { background: #dcfce7; color: #15803d; }
+  .kb.ready { background: #dcfce7; color: #15803d; display: inline-flex; align-items: center; gap: 2px; }
+  .kb .ic { width: 11px; height: 11px; }
   .kb.guest { background: #fee2e2; color: #b91c1c; }
   .room.occupied .kb { background: rgba(255,255,255,.2); color: #fff; }
   .room .note { font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 2px; }
@@ -235,6 +236,7 @@ const DAY = 24 * 3600 * 1000;
 
 // Phosphor Icons (fill, MIT) — https://phosphoricons.com
 const ICON_PATHS = {
+  key: 'M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM180,92a16,16,0,1,1,16-16A16,16,0,0,1,180,92Z',
   clean_order: 'M235.29,216.7C212.86,205.69,200,182.12,200,152V134.69a15.94,15.94,0,0,0-10.09-14.87l-28.65-11.46A8,8,0,0,1,156.79,98l22.32-56.67C184,28.79,178,14.21,165.34,9.51a24,24,0,0,0-30.7,13.71L112.25,80.08a8,8,0,0,1-10.41,4.5L73.11,73.08a15.91,15.91,0,0,0-17.38,3.66C34.68,98.4,24,123.71,24,152a111.53,111.53,0,0,0,31.15,77.53A8.06,8.06,0,0,0,61,232H232a8,8,0,0,0,8-7.51A8.21,8.21,0,0,0,235.29,216.7ZM115.11,216a87.52,87.52,0,0,1-24.26-41.71,8.21,8.21,0,0,0-9.25-6.18A8,8,0,0,0,75.28,178a105.33,105.33,0,0,0,18.36,38H64.44A95.62,95.62,0,0,1,40,152a85.92,85.92,0,0,1,7.73-36.3l137.8,55.13c3,18.06,10.55,33.5,21.89,45.19Z',
   cleaning: 'M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z',
   using: 'M216,72H32V48a8,8,0,0,0-16,0V208a8,8,0,0,0,16,0V176H240v32a8,8,0,0,0,16,0V112A40,40,0,0,0,216,72ZM32,88h72v72H32Z',
@@ -264,7 +266,6 @@ const STATES = {
 };
 // 객실 카드키 꽂힘 상태 (객실 안 키홀더 기준)
 const KEY = { EMPTY: '키 없음', GUEST: '손님키 꽂힘', CLEAN: '청소키 꽂힘', INSPACT: '점검키 꽂힘' };
-const KEY_CFG = 'key_ready'; // 프론트 키 준비 여부 (앱 전용 설정에 저장)
 const STAY = { HOURS: '대실', DAYS: '숙박', LONG_DAYS: '장기', OTHER: '기타' };
 const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야놀자호텔', GOOD_CHOICE: '여기어때',
   GOOD_CHOICE_HOTEL: '여기어때호텔', AGODA: '아고다', EXPEDIA: '익스피디아', AIR_BNB: '에어비앤비',
@@ -274,7 +275,7 @@ const AGENTS = { NAVER: '네이버', YANOLJA: '야놀자', YANOLJA_HOTEL: '야�
 const S = {
   token: null, me: null, accomId: DEFAULT_ACCOM_ID, accom: null,
   rooms: {}, types: {}, sales: {}, reserves: {}, interrupts: {}, loadedAt: 0, busy: false,
-  keyReady: {}, tab: 'rooms', showFuture: true, filter: null,
+  keyCount: {}, tab: 'rooms', showFuture: true, filter: null,
 };
 
 // ---------- utils ----------
@@ -439,14 +440,14 @@ async function loadAll({ force = false } = {}) {
   try {
     const a = S.accomId;
     const needStatic = !S.accom || !Object.keys(S.types).length || Date.now() - (S.staticAt || 0) > STATIC_TTL_MS;
-    const [rooms, sales, reserves, interrupts, accom, types, keyCfg] = await Promise.all([
+    const [rooms, sales, reserves, interrupts, accom, types, kiosks] = await Promise.all([
       api('GET', `/v1/room/all-by-accom/${a}`),
       api('GET', `/v1/room-sale/all-activated/${a}`),
       api('GET', `/v1/room-reserve/all-by-reserved/${a}`).catch(() => ({ room_reserves: {} })),
       api('GET', `/v1/room-interrupt/all-by-accom/${a}`).catch(() => ({ room_interrupts: {} })),
       needStatic ? api('GET', `/v1/accom/${a}`) : null,
       needStatic ? api('GET', `/v1/room-type/all-by-accom/${a}`) : null,
-      api('GET', `/v1/custom-config/${a}/${APP_ID}/${KEY_CFG}`).catch(() => null),
+      api('GET', `/v1/kiosk/all-by-accom/${a}`).catch(() => null),
     ]);
     if (needStatic) {
       S.accom = asMap(pick(accom, 'accoms'))[a] || pick(accom, 'accom');
@@ -457,7 +458,7 @@ async function loadAll({ force = false } = {}) {
     S.sales = asMap(pick(sales, 'room_sales'));
     S.reserves = asMap(pick(reserves, 'room_reserves'));
     S.interrupts = asMap(pick(interrupts, 'room_interrupts'));
-    S.keyReady = parseKeyCfg(keyCfg);
+    S.keyCount = countKioskKeys(kiosks);
     S.loadedAt = Date.now();
     render();
   } catch (e) {
@@ -485,7 +486,6 @@ async function checkoutRoom(r) {
   await withRoomLock(r.id, () => api('PUT', `/v1/room-sale/${S.accomId}/${r.room_sale_id}`, {
     activate: false, check_out_time: Date.now(),
   }));
-  await resetKeyReady(r.id);
   return `${roomName(r)} 퇴실 처리했습니다.`;
 }
 
@@ -496,25 +496,20 @@ async function clearRoom(r) {
   return `${roomName(r)} 공실로 바꿨습니다.`;
 }
 
-// 프론트 키 준비 여부 (이글에 해당 값이 없어 앱 전용 설정에 저장)
-function parseKeyCfg(res) {
-  if (!res || typeof res !== 'object') return {};
-  if (res.rooms && typeof res.rooms === 'object') return res.rooms;
-  for (const v of Object.values(res)) if (v && typeof v === 'object' && v.rooms) return v.rooms;
-  return {};
+// 키오스크 카드덱에 꽂힌 키 개수 (바코드별). 키가 꽂혀 있으면 그 방 키가 준비된 것.
+// 도미토리처럼 여러 침대가 한 바코드를 같이 쓰면 같은 개수를 공유한다. 127/0 = 빈 칸.
+function countKioskKeys(res) {
+  const out = {};
+  for (const k of Object.values(asMap(pick(res, 'kiosks')))) {
+    for (const c of k?.card_deck || []) {
+      const b = c?.barcode;
+      if (!b || b === 127) continue;
+      out[b] = (out[b] || 0) + 1;
+    }
+  }
+  return out;
 }
-async function saveKeyReady(next) {
-  await api('POST', `/v1/custom-config/${S.accomId}/${APP_ID}/${KEY_CFG}`, { rooms: next });
-  S.keyReady = next;
-}
-async function setKeyReady(r, ready) {
-  const next = { ...S.keyReady };
-  if (ready) next[r.id] = { at: Date.now() }; else delete next[r.id];
-  await saveKeyReady(next);
-  return ready ? `${roomName(r)} 키 준비 완료로 표시했습니다.` : `${roomName(r)} 키 준비 표시를 해제했습니다.`;
-}
-// 입실·퇴실 후엔 키 준비 표시를 지운다 (실패해도 본 처리에는 영향 없음)
-const resetKeyReady = (roomId) => S.keyReady[roomId] ? setKeyReady({ id: roomId }, false).catch(() => {}) : null;
+const keyCount = (r) => (r.card_barcode != null ? S.keyCount[r.card_barcode] || 0 : 0);
 
 // 예약에 객실 지정 (입실은 고객이 키오스크/QR로 하거나 '바로 입실'로 처리)
 async function assignReserve(v, room) {
@@ -685,9 +680,9 @@ function roomCard(r, opts = {}) {
   const sale = r.room_sale_id ? S.sales[r.room_sale_id] : null;
   const next = assignedReserve(r.id);
   const ar = !sale && next;
-  const kr = S.keyReady[r.id];
-  const keyHtml = (kr || (r.key && r.key !== 'EMPTY'))
-    ? `<div class="keyln">${kr ? '<span class="kb ready">키 준비</span>' : ''}${r.key && r.key !== 'EMPTY' ? `<span class="kb${r.key === 'GUEST' ? ' guest' : ''}">${esc(KEY[r.key] || r.key)}</span>` : ''}</div>` : '';
+  const kc = keyCount(r);
+  const keyHtml = (kc || (r.key && r.key !== 'EMPTY'))
+    ? `<div class="keyln">${kc ? `<span class="kb ready">${icon('key')}키 ${kc}</span>` : ''}${r.key && r.key !== 'EMPTY' ? `<span class="kb${r.key === 'GUEST' ? ' guest' : ''}">${esc(KEY[r.key] || r.key)}</span>` : ''}</div>` : '';
   const cls = sale ? ` occupied${r.state_summary === 'OUTING' ? ' outing' : ''}`
     : ar ? ' has-resv'
     : (r.state_summary === 'CLEAN_ORDER' || r.state_summary === 'CLEANING') ? ' clean' : '';
@@ -746,20 +741,18 @@ function openRoom(roomId) {
   openEmptyRoomSheet(r);
 }
 
-// 객실 공통: 청소 완료 + 키 상태/키 준비
+// 객실 공통: 청소 완료 + 키 상태/키오스크 키
 function roomToolsHtml(r) {
   const needClear = !r.room_sale_id && r.state_summary && r.state_summary !== 'EMPTY';
-  const kr = S.keyReady[r.id];
+  const kc = keyCount(r);
   return `${needClear ? `<button class="btn green" id="clearBtn">${icon('cleaning')} 청소 완료 → 공실로</button>` : ''}
     <dl class="kv">
       <dt>객실 키</dt><dd>${esc(KEY[r.key] || r.key || '-')}${r.last_key_changed_time ? ` <small style="color:var(--muted)">(${fmtTime(r.last_key_changed_time)})</small>` : ''}</dd>
-      <dt>키 준비</dt><dd>${kr ? `<b style="color:#15803d">준비됨</b> <small style="color:var(--muted)">(${fmtTime(kr.at)})</small>` : '<b style="color:var(--danger)">미준비</b>'}</dd>
-    </dl>
-    <button class="btn secondary" id="keyBtn">${kr ? '키 준비 해제' : '키 준비 완료로 표시'}</button>`;
+      <dt>키오스크 키</dt><dd>${kc ? `<b style="color:#15803d">${kc}개 꽂힘 (준비됨)</b>` : '<b style="color:var(--danger)">없음</b>'}</dd>
+    </dl>`;
 }
 function bindRoomTools(r) {
   $('clearBtn') && ($('clearBtn').onclick = (e) => run(() => clearRoom(r), e.currentTarget));
-  $('keyBtn').onclick = (e) => run(() => setKeyReady(r, !S.keyReady[r.id]), e.currentTarget);
 }
 
 // 공실: 예약 배정이 기본, 현장 손님은 바로 입실
@@ -1041,7 +1034,6 @@ function openCheckInSheet(r, preReserveId = null) {
         payments: buildPayments(f.pay, fee, t, v),
       };
       await withRoomLock(r.id, () => api('POST', `/v1/room-sale/${S.accomId}`, body));
-      await resetKeyReady(r.id);
       return `${roomName(r)} 입실 처리했습니다.`;
     });
   });
