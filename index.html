@@ -141,6 +141,33 @@
   .room .note { font-size: 11px; color: var(--danger); font-weight: 600; margin-top: 2px; }
   .btn.green { background: #059669; }
 
+  /* 입실 구분 배지 + 집계 탭 */
+  .cb { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-right: 3px; vertical-align: 1px;
+    background: #fff; border: 1px solid var(--line); }
+  .cb.c-resv { color: #1d4ed8; } .cb.c-walk { color: #b45309; } .cb.c-front { color: #475569; }
+  .room.occupied .cb { border-color: transparent; }
+  .stat-head { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 8px; font-size: 17px; }
+  .stat-head .nav { width: 40px; height: 40px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel); font-size: 20px; }
+  .stat-head .nav:disabled { opacity: .3; }
+  .stat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-width: 0; }
+  .stat-card .n { font-size: 24px; font-weight: 800; margin-top: 4px; }
+  .stat-card .n small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  .day { display: grid; grid-template-columns: 1fr repeat(3, 44px); align-items: center; width: 100%; text-align: left;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font-size: 14px; }
+  .day span { text-align: right; font-weight: 700; }
+  .day-head { display: grid; grid-template-columns: 1fr repeat(3, 44px); padding: 0 13px; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .day-head span { text-align: right; }
+  .day.on { border-color: var(--primary); }
+  .day-detail { background: #fafafa; border: 1px solid var(--line); border-radius: 10px; padding: 4px 12px; font-size: 13px; }
+  .day-detail > div { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 6px; align-items: baseline; }
+  .day-detail > div:last-child { border-bottom: 0; }
+  .day-detail .tm { color: var(--muted); width: 40px; flex: none; }
+  .day-detail .rm { font-weight: 700; flex: 1; min-width: 0; }
+  .day-detail .pay { color: var(--muted); font-size: 12px; text-align: right; }
+
   /* sheet */
   .backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.45); z-index: 50; display: flex;
     align-items: flex-end; justify-content: center; }
@@ -217,10 +244,12 @@
       <button data-tab="rooms" data-icon="grid">객실 현황<span class="cnt"></span></button>
       <button data-tab="resv" data-icon="calendar">예약<span class="cnt"></span></button>
       <button data-tab="out" data-icon="checkout">퇴실<span class="cnt"></span></button>
+      <button data-tab="stats" data-icon="chart">집계<span class="cnt"></span></button>
     </div>
     <div id="tabRooms"></div>
     <div id="tabResv" class="hidden"></div>
     <div id="tabOut" class="hidden"></div>
+    <div id="tabStats" class="hidden"></div>
   </section>
 </main>
 
@@ -236,6 +265,7 @@ const DAY = 24 * 3600 * 1000;
 
 // Phosphor Icons (fill, MIT) — https://phosphoricons.com
 const ICON_PATHS = {
+  chart: 'M224,200h-8V40a8,8,0,0,0-8-8H152a8,8,0,0,0-8,8V80H96a8,8,0,0,0-8,8v40H48a8,8,0,0,0-8,8v64H32a8,8,0,0,0,0,16H224a8,8,0,0,0,0-16Z',
   key: 'M216.57,39.43A80,80,0,0,0,83.91,120.78L28.69,176A15.86,15.86,0,0,0,24,187.31V216a16,16,0,0,0,16,16H72a8,8,0,0,0,8-8V208H96a8,8,0,0,0,8-8V184h16a8,8,0,0,0,5.66-2.34l9.56-9.57A79.73,79.73,0,0,0,160,176h.1A80,80,0,0,0,216.57,39.43ZM180,92a16,16,0,1,1,16-16A16,16,0,0,1,180,92Z',
   clean_order: 'M235.29,216.7C212.86,205.69,200,182.12,200,152V134.69a15.94,15.94,0,0,0-10.09-14.87l-28.65-11.46A8,8,0,0,1,156.79,98l22.32-56.67C184,28.79,178,14.21,165.34,9.51a24,24,0,0,0-30.7,13.71L112.25,80.08a8,8,0,0,1-10.41,4.5L73.11,73.08a15.91,15.91,0,0,0-17.38,3.66C34.68,98.4,24,123.71,24,152a111.53,111.53,0,0,0,31.15,77.53A8.06,8.06,0,0,0,61,232H232a8,8,0,0,0,8-7.51A8.21,8.21,0,0,0,235.29,216.7ZM115.11,216a87.52,87.52,0,0,1-24.26-41.71,8.21,8.21,0,0,0-9.25-6.18A8,8,0,0,0,75.28,178a105.33,105.33,0,0,0,18.36,38H64.44A95.62,95.62,0,0,1,40,152a85.92,85.92,0,0,1,7.73-36.3l137.8,55.13c3,18.06,10.55,33.5,21.89,45.19Z',
   cleaning: 'M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z',
@@ -276,6 +306,7 @@ const S = {
   token: null, me: null, accomId: DEFAULT_ACCOM_ID, accom: null,
   rooms: {}, types: {}, sales: {}, reserves: {}, interrupts: {}, loadedAt: 0, busy: false,
   keyCount: {}, tab: 'rooms', showFuture: true, filter: null,
+  stats: { y: 0, m: 0, stay: 'ALL', data: {}, loading: null, openDay: null },
 };
 
 // ---------- utils ----------
@@ -552,6 +583,93 @@ function showLogin(msg) {
   $('loginView').classList.remove('hidden');
   $('loginErr').textContent = msg || '';
 }
+// ---------- 입실 구분 (docs/입실구분-기획서.md) ----------
+// 예약 번호가 있으면 예약, 없으면 키오스크 입실=키오스크 워크인, 나머지(프론트·관리자)=프론트
+const SALE_CLASS = {
+  RESERVE: { label: '예약', long: '예약', cls: 'c-resv' },
+  KIOSK_WALKIN: { label: '워크인', long: '키오스크 워크인', cls: 'c-walk' },
+  FRONT: { label: '프론트', long: '프론트', cls: 'c-front' },
+};
+const classifySale = (s) => (s?.room_reserve_id ? 'RESERVE' : s?.channel_type === 'KIOSK' ? 'KIOSK_WALKIN' : 'FRONT');
+const saleClassBadge = (s) => { const c = SALE_CLASS[classifySale(s)]; return `<span class="cb ${c.cls}">${c.label}</span>`; };
+const PAY = { CARD: '카드', CASH: '현금', AGENT: 'OTA 선결제', ACCOUNT: '계좌', MILEAGE: '마일리지', NOT_PAID: '미결제' };
+// 현장에서 받은 금액 (카드 + 현금 순수령액)
+const salePaid = (s) => (s.payments || []).reduce((t, p) => t + (Number(p.amount_paid_creadit_card) || 0)
+  + Math.max(0, (Number(p.accepted_cash) || 0) - (Number(p.changed_cash) || 0)), 0);
+// 집계에 필요한 값만 남긴다 (손님 이름·카드번호·신분증 사진 등은 저장하지 않음)
+const slimSale = (s) => ({ in: s.check_in_time || 0, stay: s.stay_type, c: classifySale(s), room: s.room_id,
+  pays: [...new Set((s.payments || []).map((p) => p.type).filter(Boolean))], paid: salePaid(s) });
+
+const STATS_MIN_MS = 15 * 1000;
+const ymKey = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
+const kstNow = () => new Date(Date.now() + KST);
+const isPastMonth = (y, m) => { const k = kstNow(); return y < k.getUTCFullYear() || (y === k.getUTCFullYear() && m < k.getUTCMonth() + 1); };
+const statsCacheKey = (key) => `er.stats.${S.accomId}.${key}`;
+
+// 집계 탭을 열 때·월을 바꿀 때만 조회. 지난달 이전은 바뀌지 않으므로 기기에 저장해 두고 다시 묻지 않는다.
+async function loadStats() {
+  const st = S.stats;
+  if (!st.y) { const k = kstNow(); st.y = k.getUTCFullYear(); st.m = k.getUTCMonth() + 1; }
+  const key = ymKey(st.y, st.m), past = isPastMonth(st.y, st.m);
+  if (!st.data[key] && past) { try { const c = JSON.parse(store.get(statsCacheKey(key)) || 'null'); if (c?.rows) st.data[key] = c; } catch {} }
+  const cur = st.data[key];
+  if (cur && (past || Date.now() - cur.at < STATS_MIN_MS)) return renderStats();
+  if (st.loading) return;
+  st.loading = key;
+  renderStats();
+  try {
+    const res = await api('GET', `/v1/room-sale/all/${S.accomId}?year=${st.y}&month=${st.m}`);
+    const rows = Object.values(asMap(pick(res, 'room_sales'))).map(slimSale).sort((a, b) => b.in - a.in);
+    st.data[key] = { at: Date.now(), rows };
+    if (past) store.set(statsCacheKey(key), JSON.stringify(st.data[key]));
+  } catch (e) {
+    if (e.message !== 'unauthorized') toast('집계 불러오기 실패: ' + e.message);
+  } finally {
+    st.loading = null;
+    if (S.tab === 'stats') renderStats();
+  }
+}
+
+function renderStats() {
+  const st = S.stats, key = ymKey(st.y, st.m), d = st.data[key];
+  const k = kstNow(), isCur = st.y === k.getUTCFullYear() && st.m === k.getUTCMonth() + 1;
+  const head = `<div class="stat-head"><button class="nav" data-mon="-1" aria-label="이전 달">‹</button>
+      <b>${st.y}년 ${st.m}월</b>
+      <button class="nav" data-mon="1" aria-label="다음 달"${isCur ? ' disabled' : ''}>›</button></div>
+    <div class="seg">${[['ALL', '전체'], ['HOURS', '대실'], ['DAYS', '숙박']]
+      .map(([v, l]) => `<button data-stay="${v}" class="${st.stay === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  if (!d) {
+    $('tabStats').innerHTML = head + `<p class="empty-msg">${st.loading ? '불러오는 중…' : '불러오지 못했습니다. 탭을 다시 눌러 주세요.'}</p>`;
+    return;
+  }
+  const rows = d.rows.filter((r) => st.stay === 'ALL' || (st.stay === 'DAYS' ? r.stay === 'DAYS' || r.stay === 'LONG_DAYS' : r.stay === st.stay));
+  const tot = { RESERVE: 0, KIOSK_WALKIN: 0, FRONT: 0 };
+  let walkPaid = 0;
+  rows.forEach((r) => { tot[r.c]++; if (r.c === 'KIOSK_WALKIN') walkPaid += r.paid; });
+  const pct = (n) => (rows.length ? Math.round((n * 100) / rows.length) : 0);
+  const card = (c, sub) => `<div class="stat-card"><span class="cb ${SALE_CLASS[c].cls}">${SALE_CLASS[c].long}</span>
+    <div class="n">${tot[c]}<small>건</small></div><div class="sub">${pct(tot[c])}%${sub ? ' · ' + sub : ''}</div></div>`;
+
+  const days = {};
+  rows.forEach((r) => { const t = new Date(r.in + KST); (days[`${t.getUTCMonth() + 1}/${t.getUTCDate()}`] ||= { t, list: [] }).list.push(r); });
+  const dayHtml = Object.entries(days).map(([dk, { t, list }]) => {
+    const n = (c) => list.filter((r) => r.c === c).length;
+    const open = st.openDay === dk;
+    return `<button class="day${open ? ' on' : ''}" data-day="${dk}"><b>${dk} (${'일월화수목금토'[t.getUTCDay()]}) <small style="color:var(--muted);font-weight:500">${list.length}건</small></b>
+        <span>${n('RESERVE') || '-'}</span><span>${n('KIOSK_WALKIN') || '-'}</span><span>${n('FRONT') || '-'}</span></button>
+      ${open ? `<div class="day-detail">${list.map((r) => `<div><span class="tm">${fmtClock(r.in)}</span>
+        <span class="rm"><span class="cb ${SALE_CLASS[r.c].cls}">${SALE_CLASS[r.c].label}</span>${esc(roomName(roomById(r.room)) || '-')} · ${esc(STAY[r.stay] || '')}</span>
+        <span class="pay">${esc(r.pays.map((p) => PAY[p] || p).join('+') || '결제 기록 없음')}${r.paid ? '<br>' + won(r.paid) : ''}</span></div>`).join('')}</div>` : ''}`;
+  }).join('');
+
+  $('tabStats').innerHTML = head
+    + `<div class="stat-cards">${card('RESERVE')}${card('KIOSK_WALKIN', walkPaid ? won(walkPaid) : '')}${card('FRONT')}</div>
+    <div class="stat-note">전체 ${rows.length}건 · 입실 시각 기준. 프론트 건은 이글에 결제 기록이 없어 금액을 알 수 없습니다.${isCur ? ` · ${fmtTime(d.at)} 조회` : ''}</div>`
+    + (rows.length ? `<div class="sec-title">일자별</div>
+      <div class="day-head"><span style="text-align:left">날짜</span><span>예약</span><span>워크인</span><span>프론트</span></div>
+      <div class="list" style="margin-top:6px">${dayHtml}</div>` : '<p class="empty-msg">이 달 입실 기록이 없습니다.</p>');
+}
+
 function showBoard() {
   $('loginView').classList.add('hidden');
   $('topbar').classList.remove('hidden');
@@ -563,6 +681,7 @@ function setTab(tab) {
   $('tabResv').classList.toggle('hidden', tab !== 'resv');
   $('tabOut').classList.toggle('hidden', tab !== 'out');
   $('tabRooms').classList.toggle('hidden', tab !== 'rooms');
+  $('tabStats').classList.toggle('hidden', tab !== 'stats');
   $('summary').classList.toggle('hidden', tab !== 'rooms');
 }
 
@@ -692,7 +811,7 @@ function roomCard(r, opts = {}) {
     <div class="no">${esc(roomName(r))}</div>
     <div class="type">${esc(typeName(r.room_type_id))}</div>
     <div class="st">${icon(ar ? 'assigned' : st.icon)}${esc(st.label)}</div>
-    ${sale ? `<div class="guest">${esc(sale.guest_name || '이름 없음')}</div>
+    ${sale ? `<div class="guest">${saleClassBadge(sale)}${esc(sale.guest_name || '이름 없음')}</div>
       <div class="until">${esc(STAY[sale.stay_type] || '')} ~${fmtTime(sale.check_out_sched_time)}</div>` : ''}
     ${ar ? `<div class="assigned">배정: ${esc(ar.name || '예약')}</div><div class="until">${isToday(ar.check_in_sched) ? fmtClock(ar.check_in_sched) : fmtTime(ar.check_in_sched)} 입실 예정</div>` : ''}
     ${sale && next ? `<div class="until">다음: ${esc(next.name || '예약')} ${fmtTime(next.check_in_sched)}</div>` : ''}
@@ -832,6 +951,7 @@ function openSaleSheet(r, sale) {
     <dl class="kv">
       <dt>고객</dt><dd>${esc(sale.guest_name || '-')}</dd>
       <dt>유형</dt><dd>${esc(STAY[sale.stay_type] || sale.stay_type)}${agent ? ' · ' + esc(AGENTS[agent] || agent) : ''}</dd>
+      <dt>입실 구분</dt><dd>${saleClassBadge(sale)}${esc(SALE_CLASS[classifySale(sale)].long)}${(sale.payments || []).length ? ` <small style="color:var(--muted)">(${esc([...new Set(sale.payments.map((p) => PAY[p.type] || p.type))].join('+'))})</small>` : ''}</dd>
       <dt>입실</dt><dd>${fmtTime(sale.check_in_time)}</dd>
       <dt>퇴실 예정</dt><dd>${fmtTime(sale.check_out_sched_time)}</dd>
       <dt>요금</dt><dd>${won(sale.fee)}</dd>
@@ -1077,6 +1197,17 @@ $('tabs').addEventListener('click', (e) => {
   if (!b) return;
   if (b.dataset.tab === S.tab) window.scrollTo({ top: 0, behavior: 'smooth' });
   setTab(b.dataset.tab);
+  if (b.dataset.tab === 'stats') loadStats();
+});
+$('tabStats').addEventListener('click', (e) => {
+  const st = S.stats;
+  const mon = e.target.closest('[data-mon]'), stay = e.target.closest('[data-stay]'), day = e.target.closest('[data-day]');
+  if (mon && !mon.disabled) {
+    const t = st.y * 12 + (st.m - 1) + Number(mon.dataset.mon);
+    st.y = Math.floor(t / 12); st.m = (t % 12) + 1; st.openDay = null;
+    loadStats();
+  } else if (stay) { st.stay = stay.dataset.stay; renderStats(); }
+  else if (day) { st.openDay = st.openDay === day.dataset.day ? null : day.dataset.day; renderStats(); }
 });
 $('summary').addEventListener('click', (e) => {
   const c = e.target.closest('[data-filter]');
